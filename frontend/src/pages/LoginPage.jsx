@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { Building2, Lock, Mail, Eye, EyeOff, AlertCircle, ShieldCheck, ArrowRight, UserCheck } from 'lucide-react';
+import { Building2, Lock, Mail, Eye, EyeOff, AlertCircle, ShieldCheck, ArrowRight } from 'lucide-react';
 
 export default function LoginPage() {
   const { login } = useAuth();
@@ -35,15 +35,6 @@ export default function LoginPage() {
     }
   };
 
-  const setDemoAccount = (role) => {
-    if (role === 'admin') {
-      setEmail('admin@absensi.desa');
-      setPassword('admin123');
-    } else {
-      setEmail('budi.santoso@absensi.desa');
-      setPassword('pegawai123');
-    }
-  };
 
   return (
     <div className="login-page">
@@ -82,7 +73,7 @@ export default function LoginPage() {
               <Building2 size={28} />
             </div>
             <div>
-              <h1 className="login-title">SIPRESDES</h1>
+              <h1 className="login-title">Sistem Presensi Desa</h1>
               <p className="login-subtitle">Desa Bailangu Timur</p>
             </div>
           </div>
@@ -159,59 +150,6 @@ export default function LoginPage() {
             </button>
           </form>
 
-          {/* Quick Demo Selector */}
-          <div style={{
-            marginTop: '22px',
-            padding: '12px 14px',
-            background: 'var(--bg)',
-            border: '1px solid var(--border)',
-            borderRadius: 'var(--radius-sm)',
-            textAlign: 'center'
-          }}>
-            <div style={{ fontSize: '11.5px', color: 'var(--text-muted)', marginBottom: '8px', fontWeight: '600' }}>
-              AKSES CEPAT (DEMO):
-            </div>
-            <div style={{ display: 'flex', gap: '8px', justifyContent: 'center' }}>
-              <button
-                type="button"
-                onClick={() => setDemoAccount('admin')}
-                style={{
-                  padding: '5px 12px',
-                  borderRadius: '6px',
-                  fontSize: '11.5px',
-                  fontWeight: '600',
-                  background: 'var(--surface)',
-                  border: '1px solid var(--border)',
-                  color: 'var(--primary)',
-                  cursor: 'pointer',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '4px'
-                }}
-              >
-                <ShieldCheck size={13} /> Admin
-              </button>
-              <button
-                type="button"
-                onClick={() => setDemoAccount('pegawai')}
-                style={{
-                  padding: '5px 12px',
-                  borderRadius: '6px',
-                  fontSize: '11.5px',
-                  fontWeight: '600',
-                  background: 'var(--surface)',
-                  border: '1px solid var(--border)',
-                  color: 'var(--success)',
-                  cursor: 'pointer',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '4px'
-                }}
-              >
-                <UserCheck size={13} /> Pegawai (Budi S.)
-              </button>
-            </div>
-          </div>
         </div>
 
         <div className="login-footer-info">
