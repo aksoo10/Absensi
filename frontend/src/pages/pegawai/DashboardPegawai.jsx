@@ -1,11 +1,16 @@
 import { useEffect, useState } from 'react';
-import { UserCheck, Clock, Calendar, FileText, CheckCircle } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import {
+  UserCheck, Clock, Calendar, FileText, CheckCircle,
+  AlertCircle, ArrowRight, ShieldCheck, Sparkles, LogIn
+} from 'lucide-react';
 import api from '../../lib/api';
 
 export default function DashboardPegawai() {
   const [data, setData] = useState(null);
   const [absensiHariIni, setAbsensiHariIni] = useState(null);
   const [loading, setLoading] = useState(true);
+  const navigate = useNavigate();
 
   useEffect(() => {
     Promise.all([
@@ -23,109 +28,194 @@ export default function DashboardPegawai() {
   if (loading) return <div className="page-loader"><div className="spinner" /></div>;
 
   const stats = [
-    { label: 'Hadir Bulan Ini', value: data?.bulan_ini?.hadir ?? 0, icon: UserCheck, color: 'green' },
-    { label: 'Terlambat', value: data?.bulan_ini?.terlambat ?? 0, icon: Clock, color: 'amber' },
-    { label: 'Izin & Sakit', value: (data?.bulan_ini?.izin ?? 0) + (data?.bulan_ini?.sakit ?? 0), icon: Calendar, color: 'blue' },
-    { label: 'Pengajuan Pending', value: data?.bulan_ini?.pengajuan_pending ?? 0, icon: FileText, color: 'red' },
+    { label: 'Hadir Bulan Ini', value: data?.bulan_ini?.hadir ?? 0, subtext: 'Hari kerja tercatat', icon: UserCheck, color: 'green' },
+    { label: 'Terlambat', value: data?.bulan_ini?.terlambat ?? 0, subtext: 'Keterlambatan bulan ini', icon: Clock, color: 'amber' },
+    { label: 'Izin & Sakit', value: (data?.bulan_ini?.izin ?? 0) + (data?.bulan_ini?.sakit ?? 0), subtext: 'Disetujui admin', icon: Calendar, color: 'blue' },
+    { label: 'Pengajuan Pending', value: data?.bulan_ini?.pengajuan_pending ?? 0, subtext: 'Menunggu persetujuan', icon: FileText, color: 'red' },
   ];
 
   const absensi = absensiHariIni?.absensi;
   const jadwal = absensiHariIni?.jadwal;
+  const pegawaiNama = data?.pegawai?.nama || 'Pegawai';
+  const pegawaiJabatan = data?.pegawai?.jabatan || 'Aparatur Desa';
+
+  const formattedDate = absensiHariIni?.tanggal
+    ? new Date(absensiHariIni.tanggal).toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
+    : '';
 
   return (
     <div className="page">
-      <div className="page-header">
+      {/* Hero Welcome Card */}
+      <div className="hero-banner" style={{ background: 'linear-gradient(135deg, #090d16 0%, #064e3b 55%, #047857 100%)' }}>
         <div>
-          <h1 className="page-title">Selamat Datang, {data?.pegawai?.nama?.split(' ')[0]} 👋</h1>
-          <p className="page-desc">{absensiHariIni?.hari}, {new Date(absensiHariIni?.tanggal).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
+          <div className="hero-badge-tag" style={{ color: '#6ee7b7', borderColor: 'rgba(110, 231, 183, 0.3)' }}>
+            <Sparkles size={13} />
+            Portal Layanan Mandiri Pegawai
+          </div>
+          <h1 className="hero-banner-title">
+            Selamat Datang, {pegawaiNama} 👋
+          </h1>
+          <p className="hero-banner-subtitle">
+            {pegawaiJabatan} &bull; Pemerintah Desa Bailangu Timur. Hari ini: <strong>{formattedDate}</strong>
+          </p>
+        </div>
+        <div style={{ zIndex: 2 }}>
+          <button
+            onClick={() => navigate('/absensi')}
+            className="btn btn-primary"
+            style={{
+              background: '#ffffff',
+              color: '#065f46',
+              boxShadow: '0 4px 14px rgba(0, 0, 0, 0.25)',
+              fontWeight: '700',
+              padding: '12px 22px'
+            }}
+          >
+            <LogIn size={17} /> Catat Presensi Harian
+          </button>
         </div>
       </div>
 
-      {/* Status hari ini */}
+      {/* Status Kehadiran Hari Ini */}
       <div className="card today-card">
         <div className="card-body">
           <div className="today-header">
-            <h3>Status Kehadiran Hari Ini</h3>
+            <div>
+              <h3>Status Presensi Hari Ini</h3>
+              <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginTop: '2px' }}>
+                Periksa catatan jam masuk dan jam pulang Anda untuk hari ini
+              </p>
+            </div>
             {jadwal && (
               <div className="jadwal-info">
-                <Clock size={14} /> Jam Kerja: {jadwal.jam_masuk} — {jadwal.jam_pulang}
+                <Clock size={15} />
+                <span>Jam Kerja: {jadwal.jam_masuk} — {jadwal.jam_pulang} WIB</span>
               </div>
             )}
           </div>
+
           <div className="today-status">
+            {/* Absen Masuk Item */}
             <div className={`status-item ${absensi?.jam_masuk ? 'done' : 'pending'}`}>
               <div className="status-dot" />
               <div>
-                <div className="status-label">Absen Masuk</div>
+                <div className="status-label">Presensi Masuk</div>
                 <div className="status-val">
                   {absensi?.jam_masuk ? (
                     <>
-                      {absensi.jam_masuk}
+                      <span>{absensi.jam_masuk} WIB</span>
                       {absensi.status_masuk === 'terlambat' && (
                         <span className="badge badge-warning ml-2">Terlambat {absensi.menit_terlambat} menit</span>
                       )}
                       {absensi.status_masuk === 'tepat_waktu' && (
-                        <span className="badge badge-success ml-2"><CheckCircle size={11} /> Tepat Waktu</span>
+                        <span className="badge badge-success ml-2"><CheckCircle size={12} /> Tepat Waktu</span>
                       )}
                     </>
-                  ) : 'Belum absen'}
+                  ) : (
+                    <span style={{ color: 'var(--text-muted)', fontWeight: '500' }}>Belum melakukan absen masuk</span>
+                  )}
                 </div>
               </div>
             </div>
+
             <div className="status-line" />
+
+            {/* Absen Pulang Item */}
             <div className={`status-item ${absensi?.jam_pulang ? 'done' : 'pending'}`}>
               <div className="status-dot" />
               <div>
-                <div className="status-label">Absen Pulang</div>
-                <div className="status-val">{absensi?.jam_pulang || 'Belum absen'}</div>
+                <div className="status-label">Presensi Pulang</div>
+                <div className="status-val">
+                  {absensi?.jam_pulang ? (
+                    <>
+                      <span>{absensi.jam_pulang} WIB</span>
+                      <span className="badge badge-success ml-2"><CheckCircle size={12} /> Selesai</span>
+                    </>
+                  ) : (
+                    <span style={{ color: 'var(--text-muted)', fontWeight: '500' }}>
+                      {absensi?.jam_masuk ? 'Menunggu jam pulang kerja' : 'Lakukan absen masuk terlebih dahulu'}
+                    </span>
+                  )}
+                </div>
               </div>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Stats Cards */}
+      {/* Monthly Stats Cards */}
       <div className="stats-grid">
-        {stats.map(({ label, value, icon: Icon, color }) => (
+        {stats.map(({ label, value, subtext, icon: Icon, color }) => (
           <div key={label} className={`stat-card stat-${color}`}>
-            <div className="stat-icon"><Icon size={24} /></div>
+            <div className="stat-icon"><Icon size={26} /></div>
             <div className="stat-body">
               <div className="stat-value">{value}</div>
               <div className="stat-label">{label}</div>
+              <div style={{ fontSize: '11.5px', color: 'var(--text-muted)', marginTop: '4px', fontWeight: '500' }}>
+                {subtext}
+              </div>
             </div>
           </div>
         ))}
       </div>
 
-      {/* Riwayat terbaru */}
-      {data?.absensi_terbaru?.length > 0 && (
-        <div className="card">
-          <div className="card-header"><h3 className="card-title">Riwayat Absensi Terbaru</h3></div>
-          <div className="table-wrapper">
+      {/* Riwayat Absensi Terbaru */}
+      <div className="card">
+        <div className="card-header">
+          <h3 className="card-title">
+            <Clock size={18} />
+            Riwayat Presensi Terbaru
+          </h3>
+          <button
+            onClick={() => navigate('/riwayat')}
+            className="btn btn-secondary btn-sm"
+          >
+            Lihat Semua Riwayat <ArrowRight size={14} />
+          </button>
+        </div>
+        <div className="table-wrapper">
+          {(!data?.absensi_terbaru || data.absensi_terbaru.length === 0) ? (
+            <div className="empty-row">Belum ada catatan presensi sebelumnya</div>
+          ) : (
             <table className="data-table">
               <thead>
-                <tr><th>Tanggal</th><th>Masuk</th><th>Pulang</th><th>Status</th></tr>
+                <tr>
+                  <th>Tanggal</th>
+                  <th>Jam Masuk</th>
+                  <th>Jam Pulang</th>
+                  <th>Status Kehadiran</th>
+                  <th>Keterangan</th>
+                </tr>
               </thead>
               <tbody>
                 {data.absensi_terbaru.map((a) => (
                   <tr key={a.id}>
-                    <td>{new Date(a.tanggal).toLocaleDateString('id-ID', { weekday: 'short', day: 'numeric', month: 'short' })}</td>
-                    <td>{a.jam_masuk || '-'}</td>
-                    <td>{a.jam_pulang || '-'}</td>
                     <td>
-                      {a.status_masuk && (
-                        <span className={`badge ${a.status_masuk === 'tepat_waktu' ? 'badge-success' : 'badge-warning'}`}>
-                          {a.status_masuk === 'tepat_waktu' ? 'Tepat Waktu' : `Terlambat ${a.menit_terlambat}m`}
-                        </span>
+                      <span className="font-semibold">
+                        {new Date(a.tanggal).toLocaleDateString('id-ID', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}
+                      </span>
+                    </td>
+                    <td>{a.jam_masuk ? `${a.jam_masuk} WIB` : '-'}</td>
+                    <td>{a.jam_pulang ? `${a.jam_pulang} WIB` : '-'}</td>
+                    <td>
+                      {a.status_masuk === 'tepat_waktu' && (
+                        <span className="badge badge-success"><CheckCircle size={12} /> Tepat Waktu</span>
                       )}
+                      {a.status_masuk === 'terlambat' && (
+                        <span className="badge badge-warning"><Clock size={12} /> Terlambat {a.menit_terlambat}m</span>
+                      )}
+                      {!a.status_masuk && '-'}
+                    </td>
+                    <td style={{ color: 'var(--text-muted)', fontSize: '13px' }}>
+                      {a.jam_pulang ? 'Presensi lengkap' : a.jam_masuk ? 'Belum absen pulang' : '-'}
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
-          </div>
+          )}
         </div>
-      )}
+      </div>
     </div>
   );
 }
