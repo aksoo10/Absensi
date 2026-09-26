@@ -3,7 +3,7 @@ import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import {
   LayoutDashboard, Clock, FileText, History,
-  LogOut, Building2, Menu, X, ChevronDown, Home
+  LogOut, Building2, Menu, X, ChevronDown
 } from 'lucide-react';
 import NotificationDropdown from '../components/NotificationDropdown';
 
@@ -50,12 +50,6 @@ export default function PegawaiLayout() {
     };
   }, [profileOpen]);
 
-  const currentDateStr = new Date().toLocaleDateString('id-ID', {
-    weekday: 'long',
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric'
-  });
 
   return (
     <div className={`app-layout ${sidebarOpen ? 'sidebar-open' : 'sidebar-collapsed'}`}>
@@ -122,18 +116,7 @@ export default function PegawaiLayout() {
         <header className="topbar">
           <div className="topbar-left">
             <div className="page-breadcrumb-wrap">
-              <Home size={15} className="page-breadcrumb-sub" />
-              <span className="page-breadcrumb-sep">/</span>
-              <span className="page-breadcrumb-sub">Pegawai</span>
-              <span className="page-breadcrumb-sep">/</span>
               <h2 className="page-breadcrumb">{activeBreadcrumb}</h2>
-            </div>
-          </div>
-
-          <div className="topbar-center">
-            <div className="online-status-pill">
-              <span className="status-dot-pulse" />
-              <span>Presensi Aktif &bull; {currentDateStr}</span>
             </div>
           </div>
 

@@ -8,6 +8,7 @@ import PegawaiLayout from './layouts/PegawaiLayout';
 
 // Pages
 import LoginPage from './pages/LoginPage';
+import RegisterPage from './pages/RegisterPage';
 
 // Admin pages
 import AdminDashboard from './pages/admin/AdminDashboard';
@@ -30,6 +31,7 @@ export default function App() {
         <Routes>
           {/* Public */}
           <Route path="/login" element={<LoginPage />} />
+          <Route path="/register" element={<RegisterPage />} />
           <Route path="/" element={<Navigate to="/login" replace />} />
 
           {/* Admin Routes */}

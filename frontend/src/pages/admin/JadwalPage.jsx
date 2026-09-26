@@ -128,7 +128,7 @@ export default function JadwalPage() {
                 Shift Utama (Default)
               </div>
             )}
-            <div className="card-body" style={{ padding: '26px 24px 20px' }}>
+            <div className="card-body" style={{ padding: '24px 20px 18px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
                 <Calendar size={18} style={{ color: 'var(--primary)' }} />
                 <h3 className="jadwal-nama" style={{ margin: 0 }}>{j.nama}</h3>
@@ -136,9 +136,9 @@ export default function JadwalPage() {
 
               <div className="jadwal-time">
                 <span>{j.jam_masuk}</span>
-                <span style={{ fontSize: '18px', color: 'var(--text-light)', margin: '0 8px' }}>s/d</span>
+                <span style={{ fontSize: '15px', color: 'var(--text-light)', margin: '0 4px', fontWeight: '600' }}>s/d</span>
                 <span>{j.jam_pulang}</span>
-                <span style={{ fontSize: '13px', fontWeight: '600', color: 'var(--text-muted)', marginLeft: '6px' }}>WIB</span>
+                <span style={{ fontSize: '12px', fontWeight: '700', color: 'var(--text-muted)', marginLeft: '4px' }}>WIB</span>
               </div>
 
               <div style={{ fontSize: '12px', fontWeight: '600', color: 'var(--text-muted)', marginBottom: '8px' }}>

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { Building2, Lock, Mail, Eye, EyeOff, AlertCircle, ShieldCheck, ArrowRight } from 'lucide-react';
 
@@ -150,6 +150,18 @@ export default function LoginPage() {
             </button>
           </form>
 
+          {/* Link to Register */}
+          <div style={{
+            marginTop: '22px',
+            textAlign: 'center',
+            fontSize: '13.5px',
+            color: 'var(--text-muted)'
+          }}>
+            Belum memiliki akun?{' '}
+            <Link to="/register" style={{ color: 'var(--primary)', fontWeight: '700', textDecoration: 'none' }}>
+              Daftar Akun Baru
+            </Link>
+          </div>
         </div>
 
         <div className="login-footer-info">

@@ -34,7 +34,7 @@ class JadwalKerjaController extends Controller
         return response()->json(['message' => 'Jadwal berhasil ditambahkan', 'jadwal' => $jadwal], 201);
     }
 
-    public function update(Request $request, JadwalKerja $jadwalKerja)
+    public function update(Request $request, JadwalKerja $jadwal)
     {
         $validated = $request->validate([
             'nama' => 'sometimes|string',
@@ -47,17 +47,21 @@ class JadwalKerjaController extends Controller
         ]);
 
         if (!empty($validated['is_default'])) {
-            JadwalKerja::where('is_default', true)->update(['is_default' => false]);
+            JadwalKerja::where('is_default', true)->where('id', '!=', $jadwal->id)->update(['is_default' => false]);
         }
 
-        $jadwalKerja->update($validated);
+        $jadwal->update($validated);
 
-        return response()->json(['message' => 'Jadwal berhasil diupdate', 'jadwal' => $jadwalKerja]);
+        return response()->json(['message' => 'Jadwal berhasil diupdate', 'jadwal' => $jadwal]);
     }
 
-    public function destroy(JadwalKerja $jadwalKerja)
+    public function destroy(JadwalKerja $jadwal)
     {
-        $jadwalKerja->delete();
+        if ($jadwal->is_default) {
+            return response()->json(['message' => 'Jadwal utama (default) tidak dapat dihapus.'], 422);
+        }
+
+        $jadwal->delete();
         return response()->json(['message' => 'Jadwal berhasil dihapus']);
     }
 }
