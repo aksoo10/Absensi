@@ -928,6 +928,11 @@ a {
   color: var(--danger);
 }
 
+.dropdown-item svg {
+  pointer-events: none;
+  flex-shrink: 0;
+}
+
 .dropdown-item:hover {
   background: var(--bg-subtle);
   color: var(--text);

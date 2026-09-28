@@ -10,7 +10,8 @@ export default function LoginPage() {
   const location = useLocation();
 
   useEffect(() => {
-    if (user) {
+    const token = localStorage.getItem('token');
+    if (user && token) {
       navigate(user.role === 'admin' ? '/admin' : '/dashboard', { replace: true });
     }
   }, [user, navigate]);

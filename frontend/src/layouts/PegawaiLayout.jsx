@@ -63,9 +63,14 @@ export default function PegawaiLayout() {
     }
   };
 
-  const handleLogout = async () => {
+  const handleLogout = async (e) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    setProfileOpen(false);
     await logout();
-    navigate('/login');
+    navigate('/login', { replace: true });
   };
 
   useEffect(() => {
@@ -139,7 +144,7 @@ export default function PegawaiLayout() {
               </div>
             </div>
           )}
-          <button className="nav-item logout-btn" onClick={handleLogout}>
+          <button type="button" className="nav-item logout-btn" onClick={handleLogout}>
             <LogOut size={18} />
             {sidebarOpen && <span>Keluar Akun</span>}
           </button>
@@ -157,7 +162,7 @@ export default function PegawaiLayout() {
           <div className="topbar-right">
             <NotificationDropdown />
             <div className="profile-dropdown" ref={profileRef}>
-              <button className="profile-trigger" onClick={() => setProfileOpen(!profileOpen)}>
+              <button type="button" className="profile-trigger" onClick={() => setProfileOpen(!profileOpen)}>
                 <div className="avatar avatar-pegawai">{user?.name?.[0]?.toUpperCase() || 'P'}</div>
                 <div className="profile-info">
                   <span className="profile-name">{user?.name}</span>
@@ -166,12 +171,12 @@ export default function PegawaiLayout() {
                 <ChevronDown size={15} style={{ color: 'var(--text-muted)' }} />
               </button>
               {profileOpen && (
-                <div className="dropdown-menu">
+                <div className="dropdown-menu" onMouseDown={(e) => e.stopPropagation()}>
                   <div style={{ padding: '8px 12px 10px', borderBottom: '1px solid var(--border-light)' }}>
                     <div style={{ fontSize: '12.5px', fontWeight: '700', color: 'var(--text)' }}>{user?.name}</div>
                     <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{user?.email}</div>
                   </div>
-                  <button onClick={handleLogout} className="dropdown-item danger" style={{ marginTop: '4px' }}>
+                  <button type="button" onClick={handleLogout} className="dropdown-item danger" style={{ marginTop: '4px' }}>
                     <LogOut size={15} /> Keluar
                   </button>
                 </div>

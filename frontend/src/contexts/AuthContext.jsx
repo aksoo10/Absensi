@@ -30,6 +30,7 @@ export function AuthProvider({ children }) {
         // No cached user profile: fetch immediately
         api.get('/user')
           .then(({ data }) => {
+            if (!localStorage.getItem('token')) return;
             setUser(data);
             localStorage.setItem('user', JSON.stringify(data));
           })
@@ -46,8 +47,10 @@ export function AuthProvider({ children }) {
         // User already cached: slight delay so critical page request executes first
         setLoading(false);
         const timer = setTimeout(() => {
+          if (!localStorage.getItem('token')) return;
           api.get('/user')
             .then(({ data }) => {
+              if (!localStorage.getItem('token')) return;
               setUser(data);
               localStorage.setItem('user', JSON.stringify(data));
             })
@@ -81,13 +84,24 @@ export function AuthProvider({ children }) {
   };
 
   const logout = async () => {
+    const token = localStorage.getItem('token');
+
+    // 1. Immediately wipe client credentials & cache so UI updates instantly
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
     try {
-      await api.post('/logout');
-    } finally {
-      localStorage.removeItem('token');
-      localStorage.removeItem('user');
-      cache.clear();
-      setUser(null);
+      sessionStorage.clear();
+    } catch {}
+    cache.clear();
+    setUser(null);
+
+    // 2. Best-effort server token revocation in background
+    if (token) {
+      api.post('/logout', {}, {
+        headers: { Authorization: `Bearer ${token}` }
+      }).catch(() => {
+        // Silently ignore; client is already cleanly logged out
+      });
     }
   };
 

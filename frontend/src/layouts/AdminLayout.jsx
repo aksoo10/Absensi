@@ -82,9 +82,14 @@ export default function AdminLayout() {
     }
   };
 
-  const handleLogout = async () => {
+  const handleLogout = async (e) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    setProfileOpen(false);
     await logout();
-    navigate('/login');
+    navigate('/login', { replace: true });
   };
 
   // Close profile dropdown when clicking outside
@@ -164,7 +169,7 @@ export default function AdminLayout() {
               </div>
             </div>
           )}
-          <button className="nav-item logout-btn" onClick={handleLogout}>
+          <button type="button" className="nav-item logout-btn" onClick={handleLogout}>
             <LogOut size={18} />
             {sidebarOpen && <span>Keluar Sistem</span>}
           </button>
@@ -185,6 +190,7 @@ export default function AdminLayout() {
             <NotificationDropdown />
             <div className="profile-dropdown" ref={profileRef}>
               <button
+                type="button"
                 className="profile-trigger"
                 onClick={() => setProfileOpen(!profileOpen)}
               >
@@ -196,7 +202,7 @@ export default function AdminLayout() {
                 <ChevronDown size={15} style={{ color: 'var(--text-muted)' }} />
               </button>
               {profileOpen && (
-                <div className="dropdown-menu">
+                <div className="dropdown-menu" onMouseDown={(e) => e.stopPropagation()}>
                   <div style={{ padding: '8px 12px 10px', borderBottom: '1px solid var(--border-light)' }}>
                     <div style={{ fontSize: '12.5px', fontWeight: '700', color: 'var(--text)' }}>{user?.name}</div>
                     <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{user?.email}</div>
@@ -209,7 +215,7 @@ export default function AdminLayout() {
                   >
                     <ShieldCheck size={15} /> Pengaturan Akun Admin
                   </NavLink>
-                  <button onClick={handleLogout} className="dropdown-item danger" style={{ marginTop: '4px' }}>
+                  <button type="button" onClick={handleLogout} className="dropdown-item danger" style={{ marginTop: '4px' }}>
                     <LogOut size={15} /> Keluar
                   </button>
                 </div>
