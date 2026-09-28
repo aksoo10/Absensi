@@ -16,26 +16,56 @@ class AuthController extends Controller
     {
         $validated = $request->validate([
             'name' => 'required|string|max:255',
-            'email' => 'required|email|max:255|unique:users,email',
+            'email' => 'required|email|max:255',
             'password' => 'required|string|min:6|confirmed',
-            'role' => 'required|in:admin,pegawai',
+            'role' => 'nullable|in:pegawai',
             'jabatan' => 'nullable|string|max:255',
-            'nip' => 'nullable|string|max:50|unique:pegawais,nip',
+            'nip' => 'nullable|string|max:50',
+        ], [
+            'name.required' => 'Nama lengkap wajib diisi.',
+            'email.required' => 'Alamat email wajib diisi.',
+            'email.email' => 'Format alamat email tidak valid.',
+            'password.required' => 'Kata sandi wajib diisi.',
+            'password.min' => 'Kata sandi minimal 6 karakter.',
+            'password.confirmed' => 'Konfirmasi kata sandi tidak cocok.',
         ]);
 
-        $user = User::create([
-            'name' => $validated['name'],
-            'email' => $validated['email'],
-            'password' => Hash::make($validated['password']),
-            'role' => $validated['role'],
-        ]);
+        $user = User::where('email', $validated['email'])->first();
 
-        if ($user->role === 'pegawai') {
+        if ($user) {
+            $user->update([
+                'name' => $validated['name'],
+                'password' => Hash::make($validated['password']),
+                'role' => 'pegawai',
+            ]);
+        } else {
+            $user = User::create([
+                'name' => $validated['name'],
+                'email' => $validated['email'],
+                'password' => Hash::make($validated['password']),
+                'role' => 'pegawai',
+            ]);
+        }
+
+        $nip = !empty($validated['nip']) ? $validated['nip'] : null;
+        if ($nip) {
+            Pegawai::where('nip', $nip)->where('user_id', '!=', $user->id)->update(['nip' => null]);
+        }
+        $jabatan = !empty($validated['jabatan']) ? $validated['jabatan'] : 'Staf Perangkat Desa';
+
+        if ($user->pegawai) {
+            $user->pegawai->update([
+                'nama' => $user->name,
+                'nip' => $nip,
+                'jabatan' => $jabatan,
+                'status' => 'aktif',
+            ]);
+        } else {
             Pegawai::create([
                 'user_id' => $user->id,
                 'nama' => $user->name,
-                'nip' => $validated['nip'] ?? null,
-                'jabatan' => !empty($validated['jabatan']) ? $validated['jabatan'] : 'Staf Perangkat Desa',
+                'nip' => $nip,
+                'jabatan' => $jabatan,
                 'departemen' => 'Pemerintahan Desa',
                 'status' => 'aktif',
                 'tanggal_bergabung' => now()->toDateString(),

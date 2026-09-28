@@ -357,33 +357,30 @@ export default function PegawaiPage() {
                   />
                 </div>
 
-                {!editData && (
-                  <>
-                    <div className="form-group">
-                      <label className="form-label">Alamat Email Login *</label>
-                      <input
-                        className="form-input"
-                        type="email"
-                        placeholder="nama@absensi.desa"
-                        value={form.email}
-                        onChange={(e) => setForm({ ...form, email: e.target.value })}
-                        required
-                      />
-                    </div>
-                    <div className="form-group">
-                      <label className="form-label">Kata Sandi Awal *</label>
-                      <input
-                        className="form-input"
-                        type="password"
-                        placeholder="Minimal 6 karakter"
-                        value={form.password}
-                        onChange={(e) => setForm({ ...form, password: e.target.value })}
-                        required
-                        minLength={6}
-                      />
-                    </div>
-                  </>
-                )}
+                <div className="form-group">
+                  <label className="form-label">Alamat Email Login *</label>
+                  <input
+                    className="form-input"
+                    type="email"
+                    placeholder="nama@absensi.desa"
+                    value={form.email}
+                    onChange={(e) => setForm({ ...form, email: e.target.value })}
+                    required
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">
+                    {editData ? 'Ubah Kata Sandi (Opsional)' : 'Kata Sandi Awal *'}
+                  </label>
+                  <input
+                    className="form-input"
+                    type="password"
+                    placeholder={editData ? 'Kosongkan jika tidak ingin diubah' : 'Minimal 6 karakter'}
+                    value={form.password}
+                    onChange={(e) => setForm({ ...form, password: e.target.value })}
+                    required={!editData}
+                  />
+                </div>
               </div>
 
               <div className="modal-footer">

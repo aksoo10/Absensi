@@ -3,7 +3,7 @@ import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import {
   LayoutDashboard, Users, Calendar, ClipboardList,
-  FileText, LogOut, Building2, Menu, X, ChevronDown
+  FileText, LogOut, Building2, Menu, X, ChevronDown, UserCog, ShieldCheck
 } from 'lucide-react';
 
 import NotificationDropdown from '../components/NotificationDropdown';
@@ -20,6 +20,8 @@ const navSections = [
     title: 'Manajemen Data',
     items: [
       { to: '/admin/pegawai', icon: Users, label: 'Data Pegawai' },
+      { to: '/admin/akun', icon: UserCog, label: 'Akun Pegawai' },
+      { to: '/admin/akun-admin', icon: ShieldCheck, label: 'Akun Administrator' },
       { to: '/admin/jadwal', icon: Calendar, label: 'Jadwal Kerja' },
       { to: '/admin/pengajuan', icon: FileText, label: 'Pengajuan Cuti / Izin' },
       { to: '/admin/laporan', icon: FileText, label: 'Laporan & Rekap' },
@@ -30,6 +32,8 @@ const navSections = [
 const routeBreadcrumbMap = {
   '/admin': 'Dashboard Overview',
   '/admin/pegawai': 'Manajemen Pegawai',
+  '/admin/akun': 'Kelola Akun Pegawai',
+  '/admin/akun-admin': 'Kelola Akun Administrator',
   '/admin/jadwal': 'Pengaturan Jadwal',
   '/admin/absensi': 'Monitoring Absensi Harian',
   '/admin/pengajuan': 'Verifikasi Pengajuan',
@@ -163,6 +167,14 @@ export default function AdminLayout() {
                     <div style={{ fontSize: '12.5px', fontWeight: '700', color: 'var(--text)' }}>{user?.name}</div>
                     <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{user?.email}</div>
                   </div>
+                  <NavLink
+                    to="/admin/akun-admin"
+                    className="dropdown-item"
+                    onClick={() => setProfileOpen(false)}
+                    style={{ display: 'flex', alignItems: 'center', gap: '8px', textDecoration: 'none' }}
+                  >
+                    <ShieldCheck size={15} /> Pengaturan Akun Admin
+                  </NavLink>
                   <button onClick={handleLogout} className="dropdown-item danger" style={{ marginTop: '4px' }}>
                     <LogOut size={15} /> Keluar
                   </button>

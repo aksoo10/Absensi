@@ -13,6 +13,8 @@ import RegisterPage from './pages/RegisterPage';
 // Admin pages
 import AdminDashboard from './pages/admin/AdminDashboard';
 import PegawaiPage from './pages/admin/PegawaiPage';
+import AkunPage from './pages/admin/AkunPage';
+import AkunAdminPage from './pages/admin/AkunAdminPage';
 import JadwalPage from './pages/admin/JadwalPage';
 import AbsensiAdminPage from './pages/admin/AbsensiAdminPage';
 import PengajuanAdminPage from './pages/admin/PengajuanAdminPage';
@@ -38,6 +40,8 @@ export default function App() {
           <Route path="/admin" element={<AdminRoute><AdminLayout /></AdminRoute>}>
             <Route index element={<AdminDashboard />} />
             <Route path="pegawai" element={<PegawaiPage />} />
+            <Route path="akun" element={<AkunPage />} />
+            <Route path="akun-admin" element={<AkunAdminPage />} />
             <Route path="jadwal" element={<JadwalPage />} />
             <Route path="absensi" element={<AbsensiAdminPage />} />
             <Route path="pengajuan" element={<PengajuanAdminPage />} />
@@ -45,17 +49,11 @@ export default function App() {
           </Route>
 
           {/* Pegawai Routes */}
-          <Route path="/dashboard" element={<PrivateRoute><PegawaiLayout /></PrivateRoute>}>
-            <Route index element={<DashboardPegawai />} />
-          </Route>
-          <Route path="/absensi" element={<PrivateRoute><PegawaiLayout /></PrivateRoute>}>
-            <Route index element={<AbsensiPage />} />
-          </Route>
-          <Route path="/pengajuan" element={<PrivateRoute><PegawaiLayout /></PrivateRoute>}>
-            <Route index element={<PengajuanPegawaiPage />} />
-          </Route>
-          <Route path="/riwayat" element={<PrivateRoute><PegawaiLayout /></PrivateRoute>}>
-            <Route index element={<RiwayatPage />} />
+          <Route element={<PrivateRoute><PegawaiLayout /></PrivateRoute>}>
+            <Route path="/dashboard" element={<DashboardPegawai />} />
+            <Route path="/absensi" element={<AbsensiPage />} />
+            <Route path="/pengajuan" element={<PengajuanPegawaiPage />} />
+            <Route path="/riwayat" element={<RiwayatPage />} />
           </Route>
 
           {/* 404 fallback */}

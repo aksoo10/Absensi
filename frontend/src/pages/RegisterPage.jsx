@@ -3,14 +3,13 @@ import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import {
   Building2, Lock, Mail, Eye, EyeOff, AlertCircle,
-  ShieldCheck, ArrowRight, User, Briefcase, Hash, UserCheck
+  ShieldCheck, ArrowRight, User, Briefcase, Hash
 } from 'lucide-react';
 
 export default function RegisterPage() {
   const { register } = useAuth();
   const navigate = useNavigate();
 
-  const [role, setRole] = useState('pegawai'); // 'pegawai' | 'admin'
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [jabatan, setJabatan] = useState('');
@@ -43,19 +42,27 @@ export default function RegisterPage() {
         email,
         password,
         password_confirmation: passwordConfirmation,
-        role,
-        ...(role === 'pegawai' && {
-          jabatan: jabatan || 'Staf Perangkat Desa',
-          ...(nip && { nip }),
-        }),
+        role: 'pegawai',
+        jabatan: jabatan || 'Staf Perangkat Desa',
+        ...(nip && { nip }),
       };
 
-      const user = await register(payload);
-      navigate(user.role === 'admin' ? '/admin' : '/dashboard', { replace: true });
+      await register(payload);
+      navigate('/login', {
+        state: {
+          successMessage: 'Pendaftaran akun pegawai berhasil! Silakan masukkan kata sandi Anda untuk masuk ke sistem.',
+          registeredEmail: email,
+        },
+        replace: true,
+      });
     } catch (err) {
       if (err.response?.data?.errors) {
         const firstErr = Object.values(err.response.data.errors)[0];
-        setError(Array.isArray(firstErr) ? firstErr[0] : firstErr);
+        let msg = Array.isArray(firstErr) ? firstErr[0] : firstErr;
+        if (msg === 'validation.unique') {
+          msg = 'Email atau data ini sudah terdaftar di sistem.';
+        }
+        setError(msg);
       } else if (err.response?.data?.message) {
         setError(err.response.data.message);
       } else if (err.request) {
@@ -76,7 +83,7 @@ export default function RegisterPage() {
         <div className="login-overlay" />
       </div>
 
-      <div style={{ width: '100%', maxWidth: '490px', zIndex: 10, position: 'relative', margin: '24px 0' }}>
+      <div style={{ width: '100%', maxWidth: '470px', zIndex: 10, position: 'relative', margin: '24px 0' }}>
         <div className="login-card" style={{ padding: '32px 30px' }}>
           {/* Institution Header Tag */}
           <div style={{ textAlign: 'center', marginBottom: '14px' }}>
@@ -110,115 +117,10 @@ export default function RegisterPage() {
             </div>
           </div>
 
-          <h2 className="login-heading" style={{ fontSize: '20px' }}>Buat Akun Baru</h2>
-          <p className="login-desc" style={{ marginBottom: '18px' }}>
-            Pilih jenis akun dan lengkapi formulir pendaftaran di bawah ini
+          <h2 className="login-heading" style={{ fontSize: '21px' }}>Registrasi Pegawai</h2>
+          <p className="login-desc" style={{ marginBottom: '20px' }}>
+            Lengkapi data di bawah ini untuk mendaftarkan akun presensi Anda
           </p>
-
-          {/* Role Selection Tabs (2 Pilihan: Pegawai & Admin) */}
-          <div style={{ marginBottom: '18px' }}>
-            <div style={{
-              fontSize: '12px',
-              fontWeight: '700',
-              color: 'var(--text-muted)',
-              marginBottom: '8px',
-              textTransform: 'uppercase',
-              letterSpacing: '0.04em'
-            }}>
-              Pilih Jenis Akun (Role):
-            </div>
-            <div style={{
-              display: 'grid',
-              gridTemplateColumns: '1fr 1fr',
-              gap: '10px'
-            }}>
-              <button
-                type="button"
-                onClick={() => setRole('pegawai')}
-                style={{
-                  padding: '10px 12px',
-                  borderRadius: '10px',
-                  border: role === 'pegawai' ? '2px solid var(--primary)' : '1px solid var(--border)',
-                  background: role === 'pegawai' ? 'rgba(37, 99, 235, 0.07)' : 'var(--bg)',
-                  cursor: 'pointer',
-                  textAlign: 'left',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '10px',
-                  transition: 'all 0.2s ease'
-                }}
-              >
-                <div style={{
-                  width: '36px',
-                  height: '36px',
-                  borderRadius: '8px',
-                  background: role === 'pegawai' ? 'var(--primary)' : 'var(--border-light)',
-                  color: role === 'pegawai' ? '#ffffff' : 'var(--text-muted)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  flexShrink: 0
-                }}>
-                  <UserCheck size={18} />
-                </div>
-                <div>
-                  <div style={{
-                    fontSize: '13px',
-                    fontWeight: '700',
-                    color: role === 'pegawai' ? 'var(--primary)' : 'var(--text)'
-                  }}>
-                    Pegawai Desa
-                  </div>
-                  <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-                    Presensi & Izin
-                  </div>
-                </div>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setRole('admin')}
-                style={{
-                  padding: '10px 12px',
-                  borderRadius: '10px',
-                  border: role === 'admin' ? '2px solid var(--primary)' : '1px solid var(--border)',
-                  background: role === 'admin' ? 'rgba(37, 99, 235, 0.07)' : 'var(--bg)',
-                  cursor: 'pointer',
-                  textAlign: 'left',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '10px',
-                  transition: 'all 0.2s ease'
-                }}
-              >
-                <div style={{
-                  width: '36px',
-                  height: '36px',
-                  borderRadius: '8px',
-                  background: role === 'admin' ? 'var(--primary)' : 'var(--border-light)',
-                  color: role === 'admin' ? '#ffffff' : 'var(--text-muted)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  flexShrink: 0
-                }}>
-                  <ShieldCheck size={18} />
-                </div>
-                <div>
-                  <div style={{
-                    fontSize: '13px',
-                    fontWeight: '700',
-                    color: role === 'admin' ? 'var(--primary)' : 'var(--text)'
-                  }}>
-                    Administrator
-                  </div>
-                  <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-                    Kelola Sistem
-                  </div>
-                </div>
-              </button>
-            </div>
-          </div>
 
           {error && (
             <div className="alert alert-error" style={{ marginBottom: '16px' }}>
@@ -236,10 +138,11 @@ export default function RegisterPage() {
                   id="reg-name"
                   type="text"
                   className="form-input"
-                  placeholder="Contoh: Ahmad Fadli, S.Sos"
+                  placeholder="Masukkan nama lengkap..."
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   required
+                  autoFocus
                 />
               </div>
             </div>
@@ -260,41 +163,37 @@ export default function RegisterPage() {
               </div>
             </div>
 
-            {role === 'pegawai' && (
-              <>
-                <div className="form-group">
-                  <label htmlFor="reg-jabatan" className="form-label">Jabatan / Posisi</label>
-                  <div className="input-wrapper">
-                    <Briefcase size={18} className="input-icon" />
-                    <input
-                      id="reg-jabatan"
-                      type="text"
-                      className="form-input"
-                      placeholder="Contoh: Kaur Keuangan / Kasi Pemerintahan"
-                      value={jabatan}
-                      onChange={(e) => setJabatan(e.target.value)}
-                    />
-                  </div>
-                </div>
+            <div className="form-group">
+              <label htmlFor="reg-jabatan" className="form-label">Jabatan / Posisi</label>
+              <div className="input-wrapper">
+                <Briefcase size={18} className="input-icon" />
+                <input
+                  id="reg-jabatan"
+                  type="text"
+                  className="form-input"
+                  placeholder="Contoh: Kaur Keuangan / Kasi Pemerintahan"
+                  value={jabatan}
+                  onChange={(e) => setJabatan(e.target.value)}
+                />
+              </div>
+            </div>
 
-                <div className="form-group">
-                  <label htmlFor="reg-nip" className="form-label">
-                    NIP / No. Identitas <span style={{ fontWeight: 'normal', color: 'var(--text-muted)' }}>(Opsional)</span>
-                  </label>
-                  <div className="input-wrapper">
-                    <Hash size={18} className="input-icon" />
-                    <input
-                      id="reg-nip"
-                      type="text"
-                      className="form-input"
-                      placeholder="Contoh: 19920101001"
-                      value={nip}
-                      onChange={(e) => setNip(e.target.value)}
-                    />
-                  </div>
-                </div>
-              </>
-            )}
+            <div className="form-group">
+              <label htmlFor="reg-nip" className="form-label">
+                NIP / No. Identitas <span style={{ fontWeight: 'normal', color: 'var(--text-muted)' }}>(Opsional)</span>
+              </label>
+              <div className="input-wrapper">
+                <Hash size={18} className="input-icon" />
+                <input
+                  id="reg-nip"
+                  type="text"
+                  className="form-input"
+                  placeholder="Contoh: 19920101001"
+                  value={nip}
+                  onChange={(e) => setNip(e.target.value)}
+                />
+              </div>
+            </div>
 
             <div className="form-group">
               <label htmlFor="reg-password" className="form-label">Kata Sandi</label>
@@ -357,7 +256,7 @@ export default function RegisterPage() {
                 </>
               ) : (
                 <>
-                  Daftar Sebagai {role === 'admin' ? 'Administrator' : 'Pegawai'}
+                  Daftar Akun Pegawai
                   <ArrowRight size={17} />
                 </>
               )}

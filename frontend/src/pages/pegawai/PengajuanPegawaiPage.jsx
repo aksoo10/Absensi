@@ -1,6 +1,9 @@
 import { useEffect, useState } from 'react';
-import { Plus, CheckCircle, XCircle, Clock, Upload, FileText, Calendar, AlertCircle, X } from 'lucide-react';
-import api from '../../lib/api';
+import {
+  Plus, CheckCircle, XCircle, Clock, Upload, FileText,
+  Calendar, AlertCircle, X, ArrowLeft, Eye, ExternalLink, Download
+} from 'lucide-react';
+import api, { BACKEND_URL } from '../../lib/api';
 
 const JENIS_MAP = {
   izin: 'Izin Keperluan Pribadi',
@@ -18,10 +21,50 @@ export default function PengajuanPegawaiPage() {
   const [pengajuans, setPengajuans] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
+  const [previewDoc, setPreviewDoc] = useState(null);
+  const [downloading, setDownloading] = useState(false);
   const [form, setForm] = useState({ jenis: 'izin', tanggal_mulai: '', tanggal_selesai: '', alasan: '' });
   const [dokumen, setDokumen] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
+
+  const handleDownloadDoc = async () => {
+    if (!previewDoc) return;
+    setDownloading(true);
+    try {
+      const downloadEndpoint = previewDoc.id
+        ? `/pengajuan/${previewDoc.id}/download`
+        : `/pengajuan/download/dokumen?path=${encodeURIComponent(previewDoc.dokumen || '')}`;
+
+      const res = await api.get(downloadEndpoint, { responseType: 'blob' });
+      const blob = new Blob([res.data], { type: res.headers['content-type'] || 'application/octet-stream' });
+      const blobUrl = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = blobUrl;
+      const ext = previewDoc.dokumen ? previewDoc.dokumen.split('.').pop() : 'jpg';
+      const cleanName = (previewDoc.pemohon || 'lampiran').replace(/[^a-zA-Z0-9_-]/g, '_');
+      a.download = `Lampiran_${cleanName}.${ext}`;
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => {
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(blobUrl);
+      }, 200);
+    } catch (err) {
+      console.warn('API blob download error, falling back to direct stream:', err);
+      const fallbackUrl = `${BACKEND_URL}/api/public/download-dokumen?path=${encodeURIComponent(previewDoc.dokumen || '')}&name=${encodeURIComponent(`Lampiran_${previewDoc.pemohon || 'dokumen'}`)}`;
+      const a = document.createElement('a');
+      a.href = fallbackUrl;
+      a.setAttribute('download', '');
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => {
+        document.body.removeChild(a);
+      }, 200);
+    } finally {
+      setDownloading(false);
+    }
+  };
 
   const fetchPengajuan = () => {
     setLoading(true);
@@ -120,7 +163,35 @@ export default function PengajuanPegawaiPage() {
                           )}
                         </td>
                         <td className="max-w-xs" style={{ fontSize: '13px', lineHeight: 1.4 }}>
-                          {p.alasan}
+                          <div>{p.alasan || '-'}</div>
+                          {p.dokumen && (
+                            <button
+                              type="button"
+                              onClick={() => setPreviewDoc({
+                                id: p.id,
+                                dokumen: p.dokumen,
+                                url: `${BACKEND_URL}/storage/${p.dokumen}`,
+                                pemohon: 'Saya',
+                                jenis: JENIS_MAP[p.jenis] || p.jenis,
+                                alasan: p.alasan,
+                              })}
+                              style={{
+                                background: 'none',
+                                border: 'none',
+                                cursor: 'pointer',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '4px',
+                                color: 'var(--primary)',
+                                fontSize: '11.5px',
+                                marginTop: '4px',
+                                fontWeight: '600',
+                                padding: 0
+                              }}
+                            >
+                              <Eye size={12} /> Lihat Lampiran
+                            </button>
+                          )}
                         </td>
                         <td>
                           <span className={`badge ${status.class}`}>
@@ -198,14 +269,13 @@ export default function PengajuanPegawaiPage() {
               </div>
 
               <div className="form-group">
-                <label className="form-label">Alasan & Penjelasan Rinci *</label>
+                <label className="form-label">Alasan & Penjelasan (Opsional)</label>
                 <textarea
                   className="form-input"
                   rows={3}
                   value={form.alasan}
                   onChange={(e) => setForm({ ...form, alasan: e.target.value })}
-                  required
-                  placeholder="Jelaskan keperluan atau alasan izin/sakit/dinas luar..."
+                  placeholder="Jelaskan keperluan atau alasan (opsional)..."
                 />
               </div>
 
@@ -245,6 +315,148 @@ export default function PengajuanPegawaiPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Preview Lampiran Dokumen dengan Tombol Back / Kembali */}
+      {previewDoc && (
+        <div
+          className="modal-overlay"
+          onClick={() => setPreviewDoc(null)}
+          style={{
+            zIndex: 1200,
+            backgroundColor: 'rgba(15, 23, 42, 0.82)',
+            backdropFilter: 'blur(4px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '16px'
+          }}
+        >
+          <div
+            className="modal"
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              maxWidth: '850px',
+              width: '100%',
+              maxHeight: '92vh',
+              display: 'flex',
+              flexDirection: 'column',
+              borderRadius: '16px',
+              overflow: 'hidden',
+              boxShadow: '0 25px 60px rgba(0, 0, 0, 0.5)',
+              border: '1px solid rgba(255, 255, 255, 0.15)'
+            }}
+          >
+            {/* Top Bar (Header with Title & Close Button) */}
+            <div
+              className="modal-header"
+              style={{
+                padding: '14px 20px',
+                background: 'var(--bg)',
+                borderBottom: '1px solid var(--border)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between'
+              }}
+            >
+              <div>
+                <h4 style={{ margin: 0, fontSize: '15px', fontWeight: '700', color: 'var(--text)' }}>
+                  Lampiran Dokumen Bukti
+                </h4>
+                <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>
+                  {previewDoc.jenis}
+                </div>
+              </div>
+
+              <button
+                type="button"
+                className="modal-close"
+                onClick={() => setPreviewDoc(null)}
+                style={{ fontSize: '20px' }}
+                title="Tutup"
+              >
+                &times;
+              </button>
+            </div>
+
+            {/* Document Viewer Body */}
+            <div
+              className="modal-body"
+              style={{
+                padding: '16px',
+                background: '#090d16',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                overflow: 'auto',
+                minHeight: '350px',
+                maxHeight: 'calc(92vh - 135px)'
+              }}
+            >
+              {previewDoc.url.toLowerCase().endsWith('.pdf') ? (
+                <iframe
+                  src={previewDoc.url}
+                  title="Preview Dokumen PDF"
+                  style={{ width: '100%', height: '540px', border: 'none', borderRadius: '8px' }}
+                />
+              ) : (
+                <img
+                  src={previewDoc.url}
+                  alt="Lampiran Dokumen Pengajuan"
+                  style={{
+                    maxWidth: '100%',
+                    maxHeight: 'calc(92vh - 160px)',
+                    objectFit: 'contain',
+                    borderRadius: '8px',
+                    boxShadow: '0 8px 30px rgba(0, 0, 0, 0.6)'
+                  }}
+                />
+              )}
+            </div>
+
+            {/* Bottom Bar: Single Kembali Button & Working Unduh File Button */}
+            <div
+              className="modal-footer"
+              style={{
+                padding: '12px 20px',
+                background: 'var(--bg)',
+                borderTop: '1px solid var(--border)',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center'
+              }}
+            >
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => setPreviewDoc(null)}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  fontWeight: '600'
+                }}
+              >
+                <ArrowLeft size={16} /> Kembali
+              </button>
+
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={handleDownloadDoc}
+                disabled={downloading}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  fontWeight: '600'
+                }}
+              >
+                <Download size={15} /> {downloading ? 'Mengunduh...' : 'Unduh File'}
+              </button>
+            </div>
           </div>
         </div>
       )}

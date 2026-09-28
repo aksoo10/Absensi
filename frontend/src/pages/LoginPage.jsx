@@ -1,21 +1,42 @@
-import { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { Building2, Lock, Mail, Eye, EyeOff, AlertCircle, ShieldCheck, ArrowRight } from 'lucide-react';
+import { Building2, Lock, Mail, Eye, EyeOff, AlertCircle, ShieldCheck, ArrowRight, CheckCircle2 } from 'lucide-react';
 
 export default function LoginPage() {
   const { login } = useAuth();
   const navigate = useNavigate();
 
-  const [email, setEmail] = useState('');
+  const location = useLocation();
+
+  const [email, setEmail] = useState(() => location.state?.registeredEmail || '');
   const [password, setPassword] = useState('');
   const [showPass, setShowPass] = useState(false);
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState(() => location.state?.successMessage || '');
   const [loading, setLoading] = useState(false);
+  const [isReadOnly, setIsReadOnly] = useState(true);
+
+  useEffect(() => {
+    // Clear any unwanted browser credential autofill on mount
+    if (!location.state?.registeredEmail) {
+      setEmail('');
+      setPassword('');
+    }
+    const timer = setTimeout(() => {
+      setIsReadOnly(false);
+      if (!location.state?.registeredEmail) {
+        setEmail('');
+        setPassword('');
+      }
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [location.state]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
+    setSuccess('');
     setLoading(true);
     try {
       const user = await login(email, password);
@@ -81,6 +102,13 @@ export default function LoginPage() {
           <h2 className="login-heading">Selamat Datang</h2>
           <p className="login-desc">Silakan masuk dengan akun terdaftar Anda untuk mencatat kehadiran</p>
 
+          {success && (
+            <div className="alert alert-success" style={{ marginBottom: '16px' }}>
+              <CheckCircle2 size={17} style={{ flexShrink: 0 }} />
+              <span>{success}</span>
+            </div>
+          )}
+
           {error && (
             <div className="alert alert-error">
               <AlertCircle size={17} style={{ flexShrink: 0 }} />
@@ -88,20 +116,27 @@ export default function LoginPage() {
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="login-form">
+          <form onSubmit={handleSubmit} className="login-form" autoComplete="off">
+            {/* Hidden dummy fields to neutralize browser credential autofill */}
+            <input type="text" name="fake_email_prevent_autofill" style={{ display: 'none' }} tabIndex={-1} aria-hidden="true" autoComplete="off" />
+            <input type="password" name="fake_pass_prevent_autofill" style={{ display: 'none' }} tabIndex={-1} aria-hidden="true" autoComplete="off" />
+
             <div className="form-group">
               <label htmlFor="email" className="form-label">Alamat Email</label>
               <div className="input-wrapper">
                 <Mail size={18} className="input-icon" />
                 <input
                   id="email"
+                  name="user_email_field"
                   type="email"
                   className="form-input"
                   placeholder="nama@absensi.desa"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
+                  readOnly={isReadOnly}
+                  onFocus={() => setIsReadOnly(false)}
+                  autoComplete="off"
                   required
-                  autoFocus
                 />
               </div>
             </div>
@@ -112,11 +147,15 @@ export default function LoginPage() {
                 <Lock size={18} className="input-icon" />
                 <input
                   id="password"
+                  name="user_password_field"
                   type={showPass ? 'text' : 'password'}
                   className="form-input"
                   placeholder="Masukkan kata sandi..."
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
+                  readOnly={isReadOnly}
+                  onFocus={() => setIsReadOnly(false)}
+                  autoComplete="new-password"
                   required
                 />
                 <button

@@ -83,6 +83,8 @@ class PegawaiController extends Controller
     {
         $validated = $request->validate([
             'nama' => 'sometimes|string|max:255',
+            'email' => 'sometimes|email|unique:users,email,' . $pegawai->user_id,
+            'password' => 'nullable|string|min:6',
             'nip' => 'sometimes|nullable|string|unique:pegawais,nip,' . $pegawai->id,
             'nik' => 'sometimes|nullable|string|max:20|unique:pegawais,nik,' . $pegawai->id,
             'jabatan' => 'sometimes|string',
@@ -96,8 +98,18 @@ class PegawaiController extends Controller
 
         $pegawai->update($validated);
 
+        $userData = [];
         if (isset($validated['nama'])) {
-            $pegawai->user->update(['name' => $validated['nama']]);
+            $userData['name'] = $validated['nama'];
+        }
+        if (isset($validated['email'])) {
+            $userData['email'] = $validated['email'];
+        }
+        if (!empty($validated['password'])) {
+            $userData['password'] = Hash::make($validated['password']);
+        }
+        if (!empty($userData)) {
+            $pegawai->user->update($userData);
         }
 
         return response()->json([

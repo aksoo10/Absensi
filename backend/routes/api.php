@@ -7,11 +7,13 @@ use App\Http\Controllers\Api\LaporanController;
 use App\Http\Controllers\Api\NotifikasiController;
 use App\Http\Controllers\Api\PegawaiController;
 use App\Http\Controllers\Api\PengajuanController;
+use App\Http\Controllers\Api\UserController;
 use Illuminate\Support\Facades\Route;
 
 // ─── Public Routes ───────────────────────────────────────────────
 Route::post('/login', [AuthController::class, 'login']);
 Route::post('/register', [AuthController::class, 'register']);
+Route::get('/public/download-dokumen', [PengajuanController::class, 'downloadPublic']);
 
 // ─── Protected Routes (Sanctum) ──────────────────────────────────
 Route::middleware('auth:sanctum')->group(function () {
@@ -33,6 +35,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::prefix('pengajuan')->group(function () {
         Route::get('/', [PengajuanController::class, 'index']);
         Route::post('/', [PengajuanController::class, 'store']);
+        Route::get('/download/dokumen', [PengajuanController::class, 'downloadDokumen']);
+        Route::get('/{pengajuan}/download', [PengajuanController::class, 'downloadDokumen']);
         Route::get('/{pengajuan}', [PengajuanController::class, 'show']);
         Route::patch('/{pengajuan}/proses', [PengajuanController::class, 'proses']);
     });
@@ -52,5 +56,12 @@ Route::middleware('auth:sanctum')->group(function () {
         // Jadwal Kerja
         Route::apiResource('jadwal', JadwalKerjaController::class)
              ->except(['show']);
+
+        // Manajemen Akun Pegawai & Admin
+        Route::get('users', [UserController::class, 'index']);
+        Route::post('users', [UserController::class, 'store']);
+        Route::put('users/{user}', [UserController::class, 'update']);
+        Route::put('users/{user}/reset-password', [UserController::class, 'resetPassword']);
+        Route::delete('users/{user}', [UserController::class, 'destroy']);
     });
 });

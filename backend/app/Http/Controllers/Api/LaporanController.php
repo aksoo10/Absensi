@@ -25,16 +25,37 @@ class LaporanController extends Controller
         $terlambatHariIni = Absensi::where('tanggal', $today)->where('status_masuk', 'terlambat')->count();
         $pengajuanPending = Pengajuan::where('status', 'pending')->count();
 
-        // Absensi 7 hari terakhir
+        // Absensi 7 hari terakhir (1 query agregat teroptimasi)
+        $startDate = $today->copy()->subDays(6)->toDateString();
+        $endDate = $today->toDateString();
+
+        $absensiAggregates = Absensi::whereBetween('tanggal', [$startDate, $endDate])
+            ->selectRaw("
+                DATE_FORMAT(tanggal, '%Y-%m-%d') as tgl,
+                COUNT(CASE WHEN jam_masuk IS NOT NULL THEN 1 END) as hadir,
+                COUNT(CASE WHEN status_masuk = 'terlambat' THEN 1 END) as terlambat,
+                COUNT(*) as total_absen
+            ")
+            ->groupBy('tgl')
+            ->get()
+            ->keyBy('tgl');
+
         $grafik = [];
         for ($i = 6; $i >= 0; $i--) {
             $date = $today->copy()->subDays($i);
+            $tglKey = $date->toDateString();
+            $agg = $absensiAggregates->get($tglKey);
+
+            $hadir = $agg ? (int) $agg->hadir : 0;
+            $terlambat = $agg ? (int) $agg->terlambat : 0;
+            $totalAbsen = $agg ? (int) $agg->total_absen : 0;
+
             $grafik[] = [
-                'tanggal' => $date->toDateString(),
+                'tanggal' => $tglKey,
                 'hari' => $date->locale('id')->isoFormat('ddd'),
-                'hadir' => Absensi::where('tanggal', $date)->whereNotNull('jam_masuk')->count(),
-                'terlambat' => Absensi::where('tanggal', $date)->where('status_masuk', 'terlambat')->count(),
-                'tidak_hadir' => $totalPegawai - Absensi::where('tanggal', $date)->count(),
+                'hadir' => $hadir,
+                'terlambat' => $terlambat,
+                'tidak_hadir' => max(0, $totalPegawai - $totalAbsen),
             ];
         }
 
