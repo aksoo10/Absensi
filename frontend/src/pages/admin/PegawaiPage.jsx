@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import {
   Plus, Search, Edit2, Trash2, UserCheck, UserX,
-  Users, Phone, Mail, Building, ShieldCheck, X
+  Users, Phone, Mail, Building, ShieldCheck, X, Loader2
 } from 'lucide-react';
 import api from '../../lib/api';
 import cache from '../../lib/cache';
@@ -10,6 +10,7 @@ export default function PegawaiPage() {
   const [pegawais, setPegawais] = useState(() => cache.get('admin_pegawais') || []);
   const [loading, setLoading] = useState(() => !cache.get('admin_pegawais'));
   const [search, setSearch] = useState('');
+  const [searching, setSearching] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [editData, setEditData] = useState(null);
   const [form, setForm] = useState({
@@ -19,30 +20,72 @@ export default function PegawaiPage() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
 
-  const fetchPegawai = (q = '') => {
-    if (pegawais.length === 0 || q) setLoading(true);
-    api.get('/pegawai', { params: { search: q } })
+  const fetchPegawai = (q = '', isBackground = false) => {
+    if (!isBackground && pegawais.length === 0) setLoading(true);
+    if (isBackground) setSearching(true);
+
+    api.get('/pegawai', { params: { search: q, per_page: 50 } })
       .then(({ data }) => {
         const list = data.data || [];
-        setPegawais(list);
-        if (!q) cache.set('admin_pegawais', list);
+        if (!q) {
+          setPegawais(list);
+          cache.set('admin_pegawais', list);
+        } else {
+          setPegawais((prev) => {
+            const map = new Map(prev.map((item) => [item.id, item]));
+            for (const item of list) {
+              map.set(item.id, item);
+            }
+            return Array.from(map.values());
+          });
+        }
       })
       .catch(console.error)
-      .finally(() => setLoading(false));
+      .finally(() => {
+        setLoading(false);
+        setSearching(false);
+      });
   };
 
   useEffect(() => {
     fetchPegawai();
   }, []);
 
+  // Debounced server search to guarantee complete database results
+  useEffect(() => {
+    if (!search.trim()) return;
+    const timer = setTimeout(() => {
+      fetchPegawai(search.trim(), true);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [search]);
+
+  // Instant reactive client-side filter (0 ms instantaneous response)
+  const filteredPegawais = useMemo(() => {
+    if (!search.trim()) return pegawais;
+    const q = search.toLowerCase().trim();
+    return pegawais.filter((p) => {
+      const nama = (p.nama || '').toLowerCase();
+      const nip = (p.nip || '').toLowerCase();
+      const nik = (p.nik || '').toLowerCase();
+      const jabatan = (p.jabatan || '').toLowerCase();
+      const email = (p.user?.email || '').toLowerCase();
+      const dept = (p.departemen || '').toLowerCase();
+      const phone = (p.no_telepon || '').toLowerCase();
+      return nama.includes(q) || nip.includes(q) || nik.includes(q) ||
+             jabatan.includes(q) || email.includes(q) || dept.includes(q) || phone.includes(q);
+    });
+  }, [pegawais, search]);
+
   const handleSearch = (e) => {
     e.preventDefault();
-    fetchPegawai(search);
+    if (search.trim()) {
+      fetchPegawai(search.trim(), true);
+    }
   };
 
   const handleClearSearch = () => {
     setSearch('');
-    fetchPegawai('');
   };
 
   const openAdd = () => {
@@ -128,11 +171,15 @@ export default function PegawaiPage() {
         <div className="card-body" style={{ padding: '16px 20px' }}>
           <form onSubmit={handleSearch} className="search-bar">
             <div className="input-wrapper">
-              <Search size={18} className="input-icon" />
+              {searching ? (
+                <Loader2 size={18} className="input-icon animate-spin" style={{ color: 'var(--primary)' }} />
+              ) : (
+                <Search size={18} className="input-icon" />
+              )}
               <input
                 type="text"
                 className="form-input"
-                placeholder="Cari berdasarkan nama lengkap, NIP, NIK, atau jabatan..."
+                placeholder="Cari berdasarkan nama lengkap, NIP, NIK, jabatan, atau email..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
               />
@@ -140,11 +187,15 @@ export default function PegawaiPage() {
                 <button
                   type="button"
                   onClick={handleClearSearch}
+                  title="Hapus pencarian"
                   style={{
                     position: 'absolute',
                     right: '12px',
                     top: '50%',
                     transform: 'translateY(-50%)',
+                    background: 'none',
+                    border: 'none',
+                    cursor: 'pointer',
                     color: 'var(--text-muted)'
                   }}
                 >
@@ -153,7 +204,7 @@ export default function PegawaiPage() {
               )}
             </div>
             <button type="submit" className="btn btn-secondary">
-              Cari Pegawai
+              {searching ? 'Mencari...' : 'Cari Pegawai'}
             </button>
           </form>
         </div>
@@ -166,7 +217,7 @@ export default function PegawaiPage() {
             <Users size={18} style={{ color: 'var(--primary)' }} />
             <span style={{ fontWeight: '700', fontSize: '15px' }}>Daftar Pegawai</span>
             <span className="badge badge-info" style={{ fontSize: '11.5px', marginLeft: '6px' }}>
-              {pegawais.length} Pegawai ({totalAktif} Aktif)
+              {search ? `${filteredPegawais.length} Ditemukan (${pegawais.length} Total)` : `${pegawais.length} Pegawai (${totalAktif} Aktif)`}
             </span>
           </div>
         </div>
@@ -187,13 +238,13 @@ export default function PegawaiPage() {
                 </tr>
               </thead>
               <tbody>
-                {pegawais.length === 0 ? (
+                {filteredPegawais.length === 0 ? (
                   <tr>
                     <td colSpan={6} className="empty-row">
                       {search ? `Tidak ada pegawai yang cocok dengan kata kunci "${search}"` : 'Belum ada data pegawai terdaftar'}
                     </td>
                   </tr>
-                ) : pegawais.map((p) => (
+                ) : filteredPegawais.map((p) => (
                   <tr key={p.id}>
                     <td>
                       <div className="table-user">

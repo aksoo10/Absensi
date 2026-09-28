@@ -19,18 +19,21 @@ class UserController extends Controller
         }
 
         if ($request->search) {
-            $query->where(function ($q) use ($request) {
-                $q->where('name', 'like', "%{$request->search}%")
-                  ->orWhere('email', 'like', "%{$request->search}%")
-                  ->orWhereHas('pegawai', function ($pq) use ($request) {
-                      $pq->where('jabatan', 'like', "%{$request->search}%")
-                        ->orWhere('nip', 'like', "%{$request->search}%")
-                        ->orWhere('nik', 'like', "%{$request->search}%");
+            $search = $request->search;
+            $query->where(function ($q) use ($search) {
+                $q->where('name', 'like', "%{$search}%")
+                  ->orWhere('email', 'like', "%{$search}%")
+                  ->orWhereHas('pegawai', function ($pq) use ($search) {
+                      $pq->where('jabatan', 'like', "%{$search}%")
+                        ->orWhere('nip', 'like', "%{$search}%")
+                        ->orWhere('nik', 'like', "%{$search}%")
+                        ->orWhere('departemen', 'like', "%{$search}%");
                   });
             });
         }
 
-        return response()->json($query->latest()->paginate(15));
+        $perPage = min((int) $request->get('per_page', 50), 100);
+        return response()->json($query->latest()->paginate($perPage));
     }
 
     public function store(Request $request)

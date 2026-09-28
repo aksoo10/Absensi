@@ -11,12 +11,22 @@ class PengajuanController extends Controller
 {
     public function index(Request $request)
     {
+        $start = microtime(true);
         $user = $request->user();
 
-        $query = Pengajuan::with('pegawai.user', 'pemroses');
-
         if ($user->role === 'pegawai') {
-            $query->where('pegawai_id', $user->pegawai->id);
+            if (!$user->pegawai) {
+                return response()->json([
+                    'data' => [],
+                    'total' => 0,
+                    'current_page' => 1,
+                    'last_page' => 1
+                ]);
+            }
+            $query = Pengajuan::with('pemroses')
+                ->where('pegawai_id', $user->pegawai->id);
+        } else {
+            $query = Pengajuan::with('pegawai.user', 'pemroses');
         }
 
         if ($request->status) {
@@ -27,7 +37,9 @@ class PengajuanController extends Controller
             $query->where('jenis', $request->jenis);
         }
 
-        return response()->json($query->latest()->paginate(15));
+        $res = response()->json($query->latest()->paginate(15));
+        $res->headers->set('X-Exec-Time', round((microtime(true) - $start) * 1000, 2) . 'ms');
+        return $res;
     }
 
     public function store(Request $request)

@@ -19,8 +19,9 @@ const STATUS_MAP = {
 };
 
 export default function PengajuanPegawaiPage() {
-  const [pengajuans, setPengajuans] = useState(() => cache.get('pengajuan_list') || []);
-  const [loading, setLoading] = useState(() => !cache.get('pengajuan_list'));
+  const cached = cache.get('pengajuan_list');
+  const [pengajuans, setPengajuans] = useState(() => cached || []);
+  const [loading, setLoading] = useState(() => cached === null);
   const [showModal, setShowModal] = useState(false);
   const [previewDoc, setPreviewDoc] = useState(null);
   const [downloading, setDownloading] = useState(false);
@@ -67,9 +68,11 @@ export default function PengajuanPegawaiPage() {
     }
   };
 
-  const fetchPengajuan = () => {
-    if (pengajuans.length === 0) setLoading(true);
-    api.get('/pengajuan')
+  const fetchPengajuan = (isBackground = false) => {
+    if (!isBackground && cache.get('pengajuan_list') === null) {
+      setLoading(true);
+    }
+    cache.fetchDedup('pengajuan_list', () => api.get('/pengajuan'))
       .then(({ data }) => {
         const list = data.data || [];
         setPengajuans(list);
@@ -80,7 +83,7 @@ export default function PengajuanPegawaiPage() {
   };
 
   useEffect(() => {
-    fetchPengajuan();
+    fetchPengajuan(Boolean(cached));
   }, []);
 
   const handleSubmit = async (e) => {
@@ -92,11 +95,12 @@ export default function PengajuanPegawaiPage() {
       Object.entries(form).forEach(([k, v]) => fd.append(k, v));
       if (dokumen) fd.append('dokumen', dokumen);
       await api.post('/pengajuan', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+      cache.remove('pengajuan_list');
       cache.remove('dashboard_pegawai');
       setShowModal(false);
       setForm({ jenis: 'izin', tanggal_mulai: '', tanggal_selesai: '', alasan: '' });
       setDokumen(null);
-      fetchPengajuan();
+      fetchPengajuan(false);
     } catch (err) {
       const errs = err.response?.data?.errors;
       if (errs) setError(Object.values(errs).flat().join(', '));

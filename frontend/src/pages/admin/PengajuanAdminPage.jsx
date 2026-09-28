@@ -20,8 +20,9 @@ const JENIS_MAP = {
 };
 
 export default function PengajuanAdminPage() {
-  const [pengajuans, setPengajuans] = useState(() => cache.get('admin_pengajuans') || []);
-  const [loading, setLoading] = useState(() => !cache.get('admin_pengajuans'));
+  const cached = cache.get('admin_pengajuans');
+  const [pengajuans, setPengajuans] = useState(() => cached || []);
+  const [loading, setLoading] = useState(() => cached === null);
   const [filterStatus, setFilterStatus] = useState('');
   const [selected, setSelected] = useState(null);
   const [previewDoc, setPreviewDoc] = useState(null);
@@ -67,9 +68,12 @@ export default function PengajuanAdminPage() {
     }
   };
 
-  const fetchPengajuan = (status = '') => {
-    if (pengajuans.length === 0 || status) setLoading(true);
-    api.get('/pengajuan', { params: { status } })
+  const fetchPengajuan = (status = '', isBackground = false) => {
+    if (!isBackground && (status || cache.get('admin_pengajuans') === null)) {
+      setLoading(true);
+    }
+    const dedupKey = `admin_pengajuans_${status || 'all'}`;
+    cache.fetchDedup(dedupKey, () => api.get('/pengajuan', { params: { status } }))
       .then(({ data }) => {
         const list = data.data || [];
         setPengajuans(list);
@@ -80,7 +84,7 @@ export default function PengajuanAdminPage() {
   };
 
   useEffect(() => {
-    fetchPengajuan(filterStatus);
+    fetchPengajuan(filterStatus, Boolean(cached && !filterStatus));
   }, [filterStatus]);
 
   const handleProses = async (pengajuan, status) => {

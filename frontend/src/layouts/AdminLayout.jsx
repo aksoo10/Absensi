@@ -52,6 +52,18 @@ export default function AdminLayout() {
 
   const activeBreadcrumb = routeBreadcrumbMap[location.pathname] || 'Admin Portal';
 
+  // Pre-warm pengajuan cache quietly after initial mount for 0ms transitions
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (cache.get('admin_pengajuans') === null) {
+        cache.fetchDedup('admin_pengajuans_all', () => api.get('/pengajuan')).then(({ data }) => {
+          cache.set('admin_pengajuans', data.data || []);
+        }).catch(() => {});
+      }
+    }, 400);
+    return () => clearTimeout(timer);
+  }, []);
+
   const prefetchRoute = (to) => {
     try {
       if (to === '/admin' && !cache.get('admin_dashboard')) {
@@ -67,8 +79,8 @@ export default function AdminLayout() {
         api.get('/users', { params: { role: 'admin' } }).then(({ data }) => cache.set('admin_akun_admin', data.data || [])).catch(() => {});
       } else if (to === '/admin/jadwal' && !cache.get('admin_jadwals')) {
         api.get('/jadwal').then(({ data }) => cache.set('admin_jadwals', data || [])).catch(() => {});
-      } else if (to === '/admin/pengajuan' && !cache.get('admin_pengajuans')) {
-        api.get('/pengajuan').then(({ data }) => cache.set('admin_pengajuans', data.data || [])).catch(() => {});
+      } else if (to === '/admin/pengajuan' && cache.get('admin_pengajuans') === null) {
+        cache.fetchDedup('admin_pengajuans_all', () => api.get('/pengajuan')).then(({ data }) => cache.set('admin_pengajuans', data.data || [])).catch(() => {});
       } else if (to === '/admin/laporan') {
         const m = new Date().getMonth() + 1;
         const y = new Date().getFullYear();

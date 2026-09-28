@@ -33,6 +33,18 @@ export default function PegawaiLayout() {
 
   const activeBreadcrumb = routeBreadcrumbMap[location.pathname] || 'Portal Pegawai';
 
+  // Pre-warm critical pages cache quietly after initial mount for 0ms transitions
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (cache.get('pengajuan_list') === null) {
+        cache.fetchDedup('pengajuan_list', () => api.get('/pengajuan')).then(({ data }) => {
+          cache.set('pengajuan_list', data.data || []);
+        }).catch(() => {});
+      }
+    }, 300);
+    return () => clearTimeout(timer);
+  }, []);
+
   const prefetchRoute = (to) => {
     try {
       if (to === '/dashboard' && !cache.get('dashboard_pegawai')) {
@@ -44,8 +56,8 @@ export default function PegawaiLayout() {
         api.get('/absensi/hari-ini').then(({ data }) => {
           cache.set('absensi_hari_ini', data);
         }).catch(() => {});
-      } else if (to === '/pengajuan' && !cache.get('pengajuan_list')) {
-        api.get('/pengajuan').then(({ data }) => {
+      } else if (to === '/pengajuan' && cache.get('pengajuan_list') === null) {
+        cache.fetchDedup('pengajuan_list', () => api.get('/pengajuan')).then(({ data }) => {
           cache.set('pengajuan_list', data.data || []);
         }).catch(() => {});
       } else if (to === '/riwayat') {

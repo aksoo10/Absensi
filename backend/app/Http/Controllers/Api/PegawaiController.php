@@ -15,11 +15,16 @@ class PegawaiController extends Controller
         $query = Pegawai::with('user');
 
         if ($request->search) {
-            $query->where(function ($q) use ($request) {
-                $q->where('nama', 'like', "%{$request->search}%")
-                  ->orWhere('nip', 'like', "%{$request->search}%")
-                  ->orWhere('nik', 'like', "%{$request->search}%")
-                  ->orWhere('jabatan', 'like', "%{$request->search}%");
+            $search = $request->search;
+            $query->where(function ($q) use ($search) {
+                $q->where('nama', 'like', "%{$search}%")
+                  ->orWhere('nip', 'like', "%{$search}%")
+                  ->orWhere('nik', 'like', "%{$search}%")
+                  ->orWhere('jabatan', 'like', "%{$search}%")
+                  ->orWhere('departemen', 'like', "%{$search}%")
+                  ->orWhereHas('user', function ($uq) use ($search) {
+                      $uq->where('email', 'like', "%{$search}%");
+                  });
             });
         }
 
@@ -27,7 +32,8 @@ class PegawaiController extends Controller
             $query->where('status', $request->status);
         }
 
-        return response()->json($query->latest()->paginate(10));
+        $perPage = min((int) $request->get('per_page', 50), 100);
+        return response()->json($query->latest()->paginate($perPage));
     }
 
     public function store(Request $request)

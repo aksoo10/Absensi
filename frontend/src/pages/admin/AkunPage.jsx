@@ -1,8 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import {
   UserCog, Plus, Search, KeyRound, Edit2, Trash2,
   Mail, UserCheck, Check, Copy, Eye, EyeOff,
-  AlertCircle, RefreshCw, X, Briefcase, Hash
+  AlertCircle, RefreshCw, X, Briefcase, Hash, Loader2
 } from 'lucide-react';
 import api from '../../lib/api';
 import cache from '../../lib/cache';
@@ -11,6 +11,7 @@ export default function AkunPage() {
   const [users, setUsers] = useState(() => cache.get('admin_akun_pegawai') || []);
   const [loading, setLoading] = useState(() => !cache.get('admin_akun_pegawai'));
   const [search, setSearch] = useState('');
+  const [searching, setSearching] = useState(false);
 
   // Modal State
   const [showAccountModal, setShowAccountModal] = useState(false);
@@ -37,37 +38,76 @@ export default function AkunPage() {
   const [successMsg, setSuccessMsg] = useState('');
   const [copiedId, setCopiedId] = useState(null);
 
-  const fetchUsers = () => {
-    if (users.length === 0 || search) setLoading(true);
+  const fetchUsers = (q = '', isBackground = false) => {
+    if (!isBackground && users.length === 0) setLoading(true);
+    if (isBackground) setSearching(true);
+
     api.get('/users', {
       params: {
-        search: search || undefined,
-        role: 'pegawai'
+        search: q || undefined,
+        role: 'pegawai',
+        per_page: 50
       }
     })
       .then(({ data }) => {
         const list = data.data || [];
-        setUsers(list);
-        if (!search) cache.set('admin_akun_pegawai', list);
+        if (!q) {
+          setUsers(list);
+          cache.set('admin_akun_pegawai', list);
+        } else {
+          setUsers((prev) => {
+            const map = new Map(prev.map((item) => [item.id, item]));
+            for (const item of list) {
+              map.set(item.id, item);
+            }
+            return Array.from(map.values());
+          });
+        }
       })
       .catch(console.error)
-      .finally(() => setLoading(false));
+      .finally(() => {
+        setLoading(false);
+        setSearching(false);
+      });
   };
 
   useEffect(() => {
     fetchUsers();
   }, []);
 
+  // Debounced server search to guarantee complete database results
+  useEffect(() => {
+    if (!search.trim()) return;
+    const timer = setTimeout(() => {
+      fetchUsers(search.trim(), true);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [search]);
+
+  // Instant reactive client-side filter (0 ms instantaneous response!)
+  const filteredUsers = useMemo(() => {
+    if (!search.trim()) return users;
+    const q = search.toLowerCase().trim();
+    return users.filter((u) => {
+      const name = (u.name || '').toLowerCase();
+      const email = (u.email || '').toLowerCase();
+      const jabatan = (u.pegawai?.jabatan || '').toLowerCase();
+      const nip = (u.pegawai?.nip || '').toLowerCase();
+      const nik = (u.pegawai?.nik || '').toLowerCase();
+      const dept = (u.pegawai?.departemen || '').toLowerCase();
+      return name.includes(q) || email.includes(q) || jabatan.includes(q) || nip.includes(q) || nik.includes(q) || dept.includes(q);
+    });
+  }, [users, search]);
+
   const handleSearch = (e) => {
     e.preventDefault();
-    fetchUsers();
+    if (search.trim()) {
+      fetchUsers(search.trim(), true);
+    }
   };
 
   const handleClearSearch = () => {
     setSearch('');
-    api.get('/users', { params: { role: 'pegawai' } })
-      .then(({ data }) => setUsers(data.data || []))
-      .catch(console.error);
   };
 
   // Open Add Modal
@@ -263,10 +303,14 @@ export default function AkunPage() {
         <div className="card-body" style={{ padding: '16px 20px' }}>
           <form onSubmit={handleSearch} style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
             <div className="input-wrapper" style={{ flex: 1 }}>
-              <Search size={16} className="input-icon" />
+              {searching ? (
+                <Loader2 size={16} className="input-icon animate-spin" style={{ color: 'var(--primary)' }} />
+              ) : (
+                <Search size={16} className="input-icon" />
+              )}
               <input
                 className="form-input"
-                placeholder="Cari berdasarkan nama pegawai, alamat email, atau jabatan..."
+                placeholder="Cari berdasarkan nama pegawai, alamat email, NIP, NIK, atau jabatan..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 style={{ paddingLeft: '36px', height: '40px', fontSize: '13.5px' }}
@@ -275,6 +319,7 @@ export default function AkunPage() {
                 <button
                   type="button"
                   onClick={handleClearSearch}
+                  title="Hapus pencarian"
                   style={{
                     position: 'absolute',
                     right: '10px',
@@ -291,7 +336,7 @@ export default function AkunPage() {
               )}
             </div>
             <button type="submit" className="btn btn-outline" style={{ height: '40px' }}>
-              Cari
+              {searching ? 'Mencari...' : 'Cari'}
             </button>
           </form>
         </div>
@@ -299,6 +344,11 @@ export default function AkunPage() {
 
       {/* Users Table */}
       <div className="card table-card">
+        {search && (
+          <div style={{ padding: '12px 20px 0', fontSize: '12.5px', color: 'var(--text-secondary)' }}>
+            Menampilkan <strong>{filteredUsers.length}</strong> dari <strong>{users.length}</strong> akun pegawai
+          </div>
+        )}
         <div className="table-responsive">
           <table className="data-table">
             <thead>
@@ -318,14 +368,14 @@ export default function AkunPage() {
                     <span style={{ color: 'var(--text-muted)', fontSize: '13px' }}>Memuat data akun pegawai...</span>
                   </td>
                 </tr>
-              ) : users.length === 0 ? (
+              ) : filteredUsers.length === 0 ? (
                 <tr>
                   <td colSpan="5" className="empty-row" style={{ textAlign: 'center', padding: '40px' }}>
-                    Tidak ada akun pegawai yang sesuai kriteria pencarian
+                    {search ? `Tidak ada akun pegawai yang cocok dengan kata kunci "${search}"` : 'Belum ada data akun pegawai'}
                   </td>
                 </tr>
               ) : (
-                users.map((u) => (
+                filteredUsers.map((u) => (
                   <tr key={u.id}>
                     {/* User Identity */}
                     <td>
