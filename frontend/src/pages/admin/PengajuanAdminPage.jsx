@@ -5,6 +5,7 @@ import {
   ArrowLeft, Eye, X, Download
 } from 'lucide-react';
 import api, { BACKEND_URL } from '../../lib/api';
+import cache from '../../lib/cache';
 
 const STATUS_MAP = {
   pending: { label: 'Menunggu Verifikasi', class: 'badge-warning', icon: Clock },
@@ -19,8 +20,8 @@ const JENIS_MAP = {
 };
 
 export default function PengajuanAdminPage() {
-  const [pengajuans, setPengajuans] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [pengajuans, setPengajuans] = useState(() => cache.get('admin_pengajuans') || []);
+  const [loading, setLoading] = useState(() => !cache.get('admin_pengajuans'));
   const [filterStatus, setFilterStatus] = useState('');
   const [selected, setSelected] = useState(null);
   const [previewDoc, setPreviewDoc] = useState(null);
@@ -67,9 +68,13 @@ export default function PengajuanAdminPage() {
   };
 
   const fetchPengajuan = (status = '') => {
-    setLoading(true);
+    if (pengajuans.length === 0 || status) setLoading(true);
     api.get('/pengajuan', { params: { status } })
-      .then(({ data }) => setPengajuans(data.data || []))
+      .then(({ data }) => {
+        const list = data.data || [];
+        setPengajuans(list);
+        if (!status) cache.set('admin_pengajuans', list);
+      })
       .catch(console.error)
       .finally(() => setLoading(false));
   };
@@ -82,6 +87,9 @@ export default function PengajuanAdminPage() {
     setSubmitting(true);
     try {
       await api.patch(`/pengajuan/${pengajuan.id}/proses`, { status, catatan_admin: catatan });
+      cache.remove('admin_pengajuans');
+      cache.remove('admin_dashboard');
+      cache.remove('dashboard_pegawai');
       setSelected(null);
       setCatatan('');
       fetchPengajuan(filterStatus);
@@ -142,7 +150,7 @@ export default function PengajuanAdminPage() {
         </div>
 
         <div className="table-wrapper">
-          {loading ? (
+          {loading && pengajuans.length === 0 ? (
             <div className="table-loader"><div className="spinner" /></div>
           ) : (
             <table className="data-table">

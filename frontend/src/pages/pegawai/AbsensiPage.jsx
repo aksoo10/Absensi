@@ -4,10 +4,11 @@ import {
   Calendar, ShieldCheck, Info, CheckCircle2, AlertTriangle
 } from 'lucide-react';
 import api from '../../lib/api';
+import cache from '../../lib/cache';
 
 export default function AbsensiPage() {
-  const [hariIni, setHariIni] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [hariIni, setHariIni] = useState(() => cache.get('absensi_hari_ini'));
+  const [loading, setLoading] = useState(() => !cache.get('absensi_hari_ini'));
   const [submitting, setSubmitting] = useState(null);
   const [message, setMessage] = useState(null);
   const [currentTime, setCurrentTime] = useState(new Date());
@@ -22,7 +23,10 @@ export default function AbsensiPage() {
 
   const fetchHariIni = () => {
     api.get('/absensi/hari-ini')
-      .then(({ data }) => setHariIni(data))
+      .then(({ data }) => {
+        setHariIni(data);
+        cache.set('absensi_hari_ini', data);
+      })
       .catch(console.error)
       .finally(() => setLoading(false));
   };
@@ -40,6 +44,7 @@ export default function AbsensiPage() {
         type: 'success',
         text: data.message + (data.status_masuk === 'terlambat' ? ` (Terlambat ${data.menit_terlambat} menit)` : ' — Tepat Waktu!')
       });
+      cache.remove('dashboard_pegawai');
       fetchHariIni();
     } catch (err) {
       setMessage({ type: 'error', text: err.response?.data?.message || 'Gagal melakukan absen masuk' });
@@ -54,6 +59,7 @@ export default function AbsensiPage() {
     try {
       const { data } = await api.post('/absensi/pulang');
       setMessage({ type: 'success', text: data.message });
+      cache.remove('dashboard_pegawai');
       fetchHariIni();
     } catch (err) {
       setMessage({ type: 'error', text: err.response?.data?.message || 'Gagal melakukan absen pulang' });
@@ -142,7 +148,7 @@ export default function AbsensiPage() {
         </div>
       )}
 
-      {loading ? (
+      {loading && !hariIni ? (
         <div className="page-loader"><div className="spinner" /></div>
       ) : (
         <div className="absensi-grid">

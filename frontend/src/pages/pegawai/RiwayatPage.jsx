@@ -1,21 +1,37 @@
 import { useEffect, useState } from 'react';
 import { Calendar, Clock, CheckCircle, UserCheck, AlertTriangle } from 'lucide-react';
 import api from '../../lib/api';
+import cache from '../../lib/cache';
 
 export default function RiwayatPage() {
-  const [absensis, setAbsensis] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [bulan, setBulan] = useState(new Date().getMonth() + 1);
-  const [tahun, setTahun] = useState(new Date().getFullYear());
+  const currentMonth = new Date().getMonth() + 1;
+  const currentYear = new Date().getFullYear();
+  const initialCacheKey = `riwayat_${currentMonth}_${currentYear}_1`;
+  const initialCache = cache.get(initialCacheKey);
+
+  const [absensis, setAbsensis] = useState(() => initialCache?.data || []);
+  const [loading, setLoading] = useState(() => !initialCache);
+  const [bulan, setBulan] = useState(currentMonth);
+  const [tahun, setTahun] = useState(currentYear);
   const [page, setPage] = useState(1);
-  const [meta, setMeta] = useState(null);
+  const [meta, setMeta] = useState(() => initialCache || null);
 
   const fetchRiwayat = () => {
-    setLoading(true);
+    const key = `riwayat_${bulan}_${tahun}_${page}`;
+    const cached = cache.get(key);
+    if (cached) {
+      setAbsensis(cached.data || []);
+      setMeta(cached);
+      setLoading(false);
+    } else {
+      setLoading(true);
+    }
+
     api.get('/absensi', { params: { bulan, tahun, page } })
       .then(({ data }) => {
         setAbsensis(data.data || []);
         setMeta(data);
+        cache.set(key, data);
       })
       .catch(console.error)
       .finally(() => setLoading(false));
@@ -116,7 +132,7 @@ export default function RiwayatPage() {
         </div>
 
         <div className="table-wrapper">
-          {loading ? (
+          {loading && absensis.length === 0 ? (
             <div className="table-loader"><div className="spinner" /></div>
           ) : (
             <table className="data-table">

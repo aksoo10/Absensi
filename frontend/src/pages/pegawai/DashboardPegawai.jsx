@@ -5,27 +5,46 @@ import {
   AlertCircle, ArrowRight, ShieldCheck, Sparkles, LogIn
 } from 'lucide-react';
 import api from '../../lib/api';
+import cache from '../../lib/cache';
 
 export default function DashboardPegawai() {
-  const [data, setData] = useState(null);
-  const [absensiHariIni, setAbsensiHariIni] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [data, setData] = useState(() => cache.get('dashboard_pegawai'));
+  const [absensiHariIni, setAbsensiHariIni] = useState(() => {
+    const cachedDash = cache.get('dashboard_pegawai');
+    return cachedDash?.hari_ini || cache.get('absensi_hari_ini') || null;
+  });
+  const [loading, setLoading] = useState(() => !cache.get('dashboard_pegawai'));
   const navigate = useNavigate();
 
   useEffect(() => {
-    Promise.all([
-      api.get('/laporan/dashboard-pegawai'),
-      api.get('/absensi/hari-ini'),
-    ])
-      .then(([res1, res2]) => {
-        setData(res1.data);
-        setAbsensiHariIni(res2.data);
+    api.get('/laporan/dashboard-pegawai')
+      .then((res) => {
+        setData(res.data);
+        cache.set('dashboard_pegawai', res.data);
+        if (res.data.hari_ini) {
+          setAbsensiHariIni(res.data.hari_ini);
+          cache.set('absensi_hari_ini', res.data.hari_ini);
+        }
       })
       .catch(console.error)
       .finally(() => setLoading(false));
   }, []);
 
-  if (loading) return <div className="page-loader"><div className="spinner" /></div>;
+  if (loading && !data) {
+    return (
+      <div className="page" style={{ opacity: 0.7 }}>
+        <div className="hero-banner" style={{ background: 'linear-gradient(135deg, #090d16 0%, #064e3b 55%, #047857 100%)', minHeight: '120px' }}>
+          <div>
+            <div className="hero-badge-tag" style={{ color: '#6ee7b7' }}>Memuat data...</div>
+            <h1 className="hero-banner-title">Portal Pegawai</h1>
+          </div>
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'center', padding: '40px' }}>
+          <div className="spinner" />
+        </div>
+      </div>
+    );
+  }
 
   const stats = [
     { label: 'Hadir Bulan Ini', value: data?.bulan_ini?.hadir ?? 0, subtext: 'Hari kerja tercatat', icon: UserCheck, color: 'green' },

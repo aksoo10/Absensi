@@ -4,10 +4,16 @@ import { useAuth } from '../contexts/AuthContext';
 import { Building2, Lock, Mail, Eye, EyeOff, AlertCircle, ShieldCheck, ArrowRight, CheckCircle2 } from 'lucide-react';
 
 export default function LoginPage() {
-  const { login } = useAuth();
+  const { user, login } = useAuth();
   const navigate = useNavigate();
 
   const location = useLocation();
+
+  useEffect(() => {
+    if (user) {
+      navigate(user.role === 'admin' ? '/admin' : '/dashboard', { replace: true });
+    }
+  }, [user, navigate]);
 
   const [email, setEmail] = useState(() => location.state?.registeredEmail || '');
   const [password, setPassword] = useState('');

@@ -4,17 +4,23 @@ import {
   AlertTriangle, Filter, Search, ShieldCheck
 } from 'lucide-react';
 import api from '../../lib/api';
+import cache from '../../lib/cache';
 
 export default function AbsensiAdminPage() {
-  const [absensis, setAbsensis] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [absensis, setAbsensis] = useState(() => cache.get('admin_absensi_today') || []);
+  const [loading, setLoading] = useState(() => !cache.get('admin_absensi_today'));
   const [tanggal, setTanggal] = useState(new Date().toISOString().split('T')[0]);
   const [filterStatus, setFilterStatus] = useState('all');
 
   const fetchAbsensi = () => {
-    setLoading(true);
+    const isToday = tanggal === new Date().toISOString().split('T')[0];
+    if (absensis.length === 0) setLoading(true);
     api.get('/absensi', { params: { tanggal } })
-      .then(({ data }) => setAbsensis(data.data || []))
+      .then(({ data }) => {
+        const list = data.data || [];
+        setAbsensis(list);
+        if (isToday) cache.set('admin_absensi_today', list);
+      })
       .catch(console.error)
       .finally(() => setLoading(false));
   };
@@ -160,7 +166,7 @@ export default function AbsensiAdminPage() {
         </div>
 
         <div className="table-wrapper">
-          {loading ? (
+          {loading && absensis.length === 0 ? (
             <div className="table-loader"><div className="spinner" /></div>
           ) : (
             <table className="data-table">

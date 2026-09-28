@@ -6,10 +6,11 @@ import {
   BellOff, ChevronRight
 } from 'lucide-react';
 import api from '../lib/api';
+import cache from '../lib/cache';
 
 export default function NotificationDropdown() {
   const [open, setOpen] = useState(false);
-  const [notifications, setNotifications] = useState([]);
+  const [notifications, setNotifications] = useState(() => cache.get('notifikasi') || []);
   const [loading, setLoading] = useState(false);
   const [readIds, setReadIds] = useState(() => {
     try {
@@ -26,7 +27,9 @@ export default function NotificationDropdown() {
     try {
       setLoading(true);
       const { data } = await api.get('/notifikasi');
-      setNotifications(data.data || []);
+      const list = data.data || [];
+      setNotifications(list);
+      cache.set('notifikasi', list);
     } catch (err) {
       console.error('Failed to load notifications:', err);
     } finally {
@@ -35,11 +38,15 @@ export default function NotificationDropdown() {
   };
 
   useEffect(() => {
-    fetchNotifications();
+    // Initial fetch slightly deferred so primary page API takes priority
+    const timer = setTimeout(fetchNotifications, 350);
 
-    // Auto-refresh every 30 seconds
-    const interval = setInterval(fetchNotifications, 30000);
-    return () => clearInterval(interval);
+    // Auto-refresh every 45 seconds
+    const interval = setInterval(fetchNotifications, 45000);
+    return () => {
+      clearTimeout(timer);
+      clearInterval(interval);
+    };
   }, []);
 
   // Close when clicking outside

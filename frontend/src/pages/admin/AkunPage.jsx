@@ -5,10 +5,11 @@ import {
   AlertCircle, RefreshCw, X, Briefcase, Hash
 } from 'lucide-react';
 import api from '../../lib/api';
+import cache from '../../lib/cache';
 
 export default function AkunPage() {
-  const [users, setUsers] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [users, setUsers] = useState(() => cache.get('admin_akun_pegawai') || []);
+  const [loading, setLoading] = useState(() => !cache.get('admin_akun_pegawai'));
   const [search, setSearch] = useState('');
 
   // Modal State
@@ -37,14 +38,18 @@ export default function AkunPage() {
   const [copiedId, setCopiedId] = useState(null);
 
   const fetchUsers = () => {
-    setLoading(true);
+    if (users.length === 0 || search) setLoading(true);
     api.get('/users', {
       params: {
         search: search || undefined,
         role: 'pegawai'
       }
     })
-      .then(({ data }) => setUsers(data.data || []))
+      .then(({ data }) => {
+        const list = data.data || [];
+        setUsers(list);
+        if (!search) cache.set('admin_akun_pegawai', list);
+      })
       .catch(console.error)
       .finally(() => setLoading(false));
   };
@@ -121,6 +126,8 @@ export default function AkunPage() {
         await api.post('/users', { ...accountForm, role: 'pegawai' });
         setSuccessMsg(`Akun baru untuk pegawai "${accountForm.name}" berhasil dibuat.`);
       }
+      cache.remove('admin_akun_pegawai');
+      cache.remove('admin_pegawais');
       setShowAccountModal(false);
       fetchUsers();
       setTimeout(() => setSuccessMsg(''), 4000);
@@ -162,6 +169,8 @@ export default function AkunPage() {
     if (!confirm(`Hapus akun pegawai "${u.name}" (${u.email})? Tindakan ini tidak dapat dibatalkan.`)) return;
     try {
       await api.delete(`/users/${u.id}`);
+      cache.remove('admin_akun_pegawai');
+      cache.remove('admin_pegawais');
       setSuccessMsg(`Akun ${u.email} berhasil dihapus.`);
       fetchUsers();
       setTimeout(() => setSuccessMsg(''), 4000);
@@ -302,7 +311,7 @@ export default function AkunPage() {
               </tr>
             </thead>
             <tbody>
-              {loading ? (
+              {loading && users.length === 0 ? (
                 <tr>
                   <td colSpan="5" style={{ textAlign: 'center', padding: '40px' }}>
                     <div className="spinner" style={{ margin: '0 auto 10px' }} />

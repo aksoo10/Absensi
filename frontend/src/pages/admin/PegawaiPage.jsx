@@ -4,10 +4,11 @@ import {
   Users, Phone, Mail, Building, ShieldCheck, X
 } from 'lucide-react';
 import api from '../../lib/api';
+import cache from '../../lib/cache';
 
 export default function PegawaiPage() {
-  const [pegawais, setPegawais] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [pegawais, setPegawais] = useState(() => cache.get('admin_pegawais') || []);
+  const [loading, setLoading] = useState(() => !cache.get('admin_pegawais'));
   const [search, setSearch] = useState('');
   const [showModal, setShowModal] = useState(false);
   const [editData, setEditData] = useState(null);
@@ -19,9 +20,13 @@ export default function PegawaiPage() {
   const [error, setError] = useState('');
 
   const fetchPegawai = (q = '') => {
-    setLoading(true);
+    if (pegawais.length === 0 || q) setLoading(true);
     api.get('/pegawai', { params: { search: q } })
-      .then(({ data }) => setPegawais(data.data || []))
+      .then(({ data }) => {
+        const list = data.data || [];
+        setPegawais(list);
+        if (!q) cache.set('admin_pegawais', list);
+      })
       .catch(console.error)
       .finally(() => setLoading(false));
   };
@@ -77,6 +82,9 @@ export default function PegawaiPage() {
       } else {
         await api.post('/pegawai', form);
       }
+      cache.remove('admin_pegawais');
+      cache.remove('admin_dashboard');
+      cache.remove('admin_akun_pegawai');
       setShowModal(false);
       fetchPegawai(search);
     } catch (err) {
@@ -92,6 +100,9 @@ export default function PegawaiPage() {
     if (!confirm(`Hapus data pegawai "${nama}"? Semua catatan terkait akan dinonaktifkan.`)) return;
     try {
       await api.delete(`/pegawai/${id}`);
+      cache.remove('admin_pegawais');
+      cache.remove('admin_dashboard');
+      cache.remove('admin_akun_pegawai');
       fetchPegawai(search);
     } catch (err) {
       alert('Gagal menghapus pegawai');
@@ -161,7 +172,7 @@ export default function PegawaiPage() {
         </div>
 
         <div className="table-wrapper">
-          {loading ? (
+          {loading && pegawais.length === 0 ? (
             <div className="table-loader"><div className="spinner" /></div>
           ) : (
             <table className="data-table">

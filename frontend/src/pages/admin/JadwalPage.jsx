@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react';
 import { Plus, Edit2, Trash2, Calendar, Clock, Check, AlertCircle } from 'lucide-react';
 import api from '../../lib/api';
+import cache from '../../lib/cache';
 
 const HARI = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Minggu'];
 
 export default function JadwalPage() {
-  const [jadwals, setJadwals] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [jadwals, setJadwals] = useState(() => cache.get('admin_jadwals') || []);
+  const [loading, setLoading] = useState(() => !cache.get('admin_jadwals'));
   const [showModal, setShowModal] = useState(false);
   const [editData, setEditData] = useState(null);
   const [form, setForm] = useState({
@@ -21,9 +22,13 @@ export default function JadwalPage() {
   const [error, setError] = useState('');
 
   const fetchJadwal = () => {
-    setLoading(true);
+    if (jadwals.length === 0) setLoading(true);
     api.get('/jadwal')
-      .then(({ data }) => setJadwals(data))
+      .then(({ data }) => {
+        const list = data || [];
+        setJadwals(list);
+        cache.set('admin_jadwals', list);
+      })
       .catch(console.error)
       .finally(() => setLoading(false));
   };
@@ -81,6 +86,9 @@ export default function JadwalPage() {
       } else {
         await api.post('/jadwal', form);
       }
+      cache.remove('admin_jadwals');
+      cache.remove('absensi_hari_ini');
+      cache.remove('dashboard_pegawai');
       setShowModal(false);
       fetchJadwal();
     } catch (err) {
@@ -94,6 +102,9 @@ export default function JadwalPage() {
     if (!confirm(`Hapus jadwal kerja "${nama}"?`)) return;
     try {
       await api.delete(`/jadwal/${id}`);
+      cache.remove('admin_jadwals');
+      cache.remove('absensi_hari_ini');
+      cache.remove('dashboard_pegawai');
       fetchJadwal();
     } catch (err) {
       alert(err.response?.data?.message || 'Gagal menghapus jadwal kerja');
@@ -113,7 +124,7 @@ export default function JadwalPage() {
       </div>
 
       <div className="cards-grid">
-        {loading ? (
+        {loading && jadwals.length === 0 ? (
           <div className="page-loader"><div className="spinner" /></div>
         ) : jadwals.length === 0 ? (
           <div className="card" style={{ gridColumn: '1/-1' }}>

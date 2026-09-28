@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\JadwalKerja;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 
 class JadwalKerjaController extends Controller
 {
@@ -30,6 +31,7 @@ class JadwalKerjaController extends Controller
         }
 
         $jadwal = JadwalKerja::create($validated);
+        Cache::forget('jadwal_default');
 
         return response()->json(['message' => 'Jadwal berhasil ditambahkan', 'jadwal' => $jadwal], 201);
     }
@@ -51,6 +53,7 @@ class JadwalKerjaController extends Controller
         }
 
         $jadwal->update($validated);
+        Cache::forget('jadwal_default');
 
         return response()->json(['message' => 'Jadwal berhasil diupdate', 'jadwal' => $jadwal]);
     }
@@ -62,6 +65,7 @@ class JadwalKerjaController extends Controller
         }
 
         $jadwal->delete();
+        Cache::forget('jadwal_default');
         return response()->json(['message' => 'Jadwal berhasil dihapus']);
     }
 }

@@ -8,6 +8,7 @@ use App\Models\JadwalKerja;
 use App\Models\Pegawai;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 
 class AbsensiController extends Controller
 {
@@ -62,7 +63,7 @@ class AbsensiController extends Controller
         }
 
         // Tentukan status berdasarkan jadwal
-        $jadwal = JadwalKerja::where('is_default', true)->first();
+        $jadwal = Cache::remember('jadwal_default', 3600, fn() => JadwalKerja::where('is_default', true)->first());
         $sekarang = Carbon::now();
         $statusMasuk = 'tepat_waktu';
         $menitTerlambat = 0;
@@ -147,7 +148,7 @@ class AbsensiController extends Controller
                          ->where('tanggal', today())
                          ->first();
 
-        $jadwal = JadwalKerja::where('is_default', true)->first();
+        $jadwal = Cache::remember('jadwal_default', 3600, fn() => JadwalKerja::where('is_default', true)->first());
 
         return response()->json([
             'absensi' => $absensi,

@@ -94,7 +94,7 @@ class NotifikasiController extends Controller
                     ->whereIn('status', ['disetujui', 'ditolak'])
                     ->latest('diproses_pada')
                     ->take(5)
-                    ->get();
+                    ->get(['id', 'jenis', 'status', 'catatan_admin', 'diproses_pada']);
 
                 foreach ($pengajuans as $p) {
                     $jenis = ucfirst(str_replace('_', ' ', $p->jenis));
@@ -116,7 +116,7 @@ class NotifikasiController extends Controller
                     ->where('status', 'pending')
                     ->latest()
                     ->take(3)
-                    ->get();
+                    ->get(['id', 'jenis', 'status', 'created_at']);
 
                 foreach ($pending as $pend) {
                     $jenis = ucfirst(str_replace('_', ' ', $pend->jenis));
@@ -135,7 +135,7 @@ class NotifikasiController extends Controller
                 // 3. Status Absensi Hari Ini
                 $absensiHariIni = Absensi::where('pegawai_id', $pegawai->id)
                     ->where('tanggal', today())
-                    ->first();
+                    ->first(['id', 'jam_masuk', 'jam_pulang', 'status_masuk']);
 
                 if (!$absensiHariIni || !$absensiHariIni->jam_masuk) {
                     $notifikasi[] = [

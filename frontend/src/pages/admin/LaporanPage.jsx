@@ -1,24 +1,41 @@
 import { useEffect, useState } from 'react';
 import { FileBarChart, Printer, Calendar, Users, Clock, CheckCircle } from 'lucide-react';
 import api from '../../lib/api';
+import cache from '../../lib/cache';
 
 export default function LaporanPage() {
-  const [bulan, setBulan] = useState(new Date().getMonth() + 1);
-  const [tahun, setTahun] = useState(new Date().getFullYear());
-  const [laporan, setLaporan] = useState([]);
-  const [loading, setLoading] = useState(false);
+  const currentMonth = new Date().getMonth() + 1;
+  const currentYear = new Date().getFullYear();
+  const initialCacheKey = `admin_laporan_${currentMonth}_${currentYear}`;
+
+  const [bulan, setBulan] = useState(currentMonth);
+  const [tahun, setTahun] = useState(currentYear);
+  const [laporan, setLaporan] = useState(() => cache.get(initialCacheKey) || []);
+  const [loading, setLoading] = useState(() => !cache.get(initialCacheKey));
 
   const fetchLaporan = () => {
-    setLoading(true);
+    const key = `admin_laporan_${bulan}_${tahun}`;
+    const cached = cache.get(key);
+    if (cached) {
+      setLaporan(cached);
+      setLoading(false);
+    } else {
+      setLoading(true);
+    }
+
     api.get('/laporan/absensi', { params: { bulan, tahun } })
-      .then(({ data }) => setLaporan(data.laporan || []))
+      .then(({ data }) => {
+        const list = data.laporan || [];
+        setLaporan(list);
+        cache.set(key, list);
+      })
       .catch(console.error)
       .finally(() => setLoading(false));
   };
 
   useEffect(() => {
     fetchLaporan();
-  }, []);
+  }, [bulan, tahun]);
 
   const bulanNames = [
     'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
@@ -173,7 +190,14 @@ export default function LaporanPage() {
                 </tr>
               </thead>
               <tbody>
-                {laporan.length === 0 ? (
+                {loading && laporan.length === 0 ? (
+                  <tr>
+                    <td colSpan={12} style={{ textAlign: 'center', padding: '40px' }}>
+                      <div className="spinner" style={{ margin: '0 auto 10px' }} />
+                      <span style={{ color: 'var(--text-muted)', fontSize: '13px' }}>Memuat data laporan presensi...</span>
+                    </td>
+                  </tr>
+                ) : laporan.length === 0 ? (
                   <tr>
                     <td colSpan={12} className="empty-row">
                       Tidak ada catatan presensi pada periode {bulanNames[bulan - 1]} {tahun}

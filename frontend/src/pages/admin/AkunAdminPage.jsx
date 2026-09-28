@@ -5,12 +5,13 @@ import {
   X, UserCheck
 } from 'lucide-react';
 import api from '../../lib/api';
+import cache from '../../lib/cache';
 import { useAuth } from '../../contexts/AuthContext';
 
 export default function AkunAdminPage() {
   const { user: currentUser, updateUser } = useAuth();
-  const [admins, setAdmins] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [admins, setAdmins] = useState(() => cache.get('admin_akun_admin') || []);
+  const [loading, setLoading] = useState(() => !cache.get('admin_akun_admin'));
   const [search, setSearch] = useState('');
 
   // Modal State
@@ -36,14 +37,18 @@ export default function AkunAdminPage() {
   const [copiedId, setCopiedId] = useState(null);
 
   const fetchAdmins = () => {
-    setLoading(true);
+    if (admins.length === 0 || search) setLoading(true);
     api.get('/users', {
       params: {
         search: search || undefined,
         role: 'admin'
       }
     })
-      .then(({ data }) => setAdmins(data.data || []))
+      .then(({ data }) => {
+        const list = data.data || [];
+        setAdmins(list);
+        if (!search) cache.set('admin_akun_admin', list);
+      })
       .catch(console.error)
       .finally(() => setLoading(false));
   };
@@ -134,6 +139,7 @@ export default function AkunAdminPage() {
         });
         setSuccessMsg(`Akun administrator baru "${accountForm.name}" berhasil dibuat.`);
       }
+      cache.remove('admin_akun_admin');
       setShowAccountModal(false);
       fetchAdmins();
       setTimeout(() => setSuccessMsg(''), 4500);
@@ -179,6 +185,7 @@ export default function AkunAdminPage() {
     if (!confirm(`Hapus akun administrator "${admin.name}" (${admin.email})? Tindakan ini tidak dapat dibatalkan.`)) return;
     try {
       await api.delete(`/users/${admin.id}`);
+      cache.remove('admin_akun_admin');
       setSuccessMsg(`Akun administrator ${admin.email} berhasil dihapus.`);
       fetchAdmins();
       setTimeout(() => setSuccessMsg(''), 4500);
@@ -278,7 +285,7 @@ export default function AkunAdminPage() {
               </tr>
             </thead>
             <tbody>
-              {loading ? (
+              {loading && admins.length === 0 ? (
                 <tr>
                   <td colSpan="5" style={{ textAlign: 'center', padding: '40px' }}>
                     <div className="spinner" style={{ margin: '0 auto 10px' }} />

@@ -7,6 +7,8 @@ import {
 } from 'lucide-react';
 
 import NotificationDropdown from '../components/NotificationDropdown';
+import api from '../lib/api';
+import cache from '../lib/cache';
 
 const navSections = [
   {
@@ -49,6 +51,36 @@ export default function AdminLayout() {
   const profileRef = useRef(null);
 
   const activeBreadcrumb = routeBreadcrumbMap[location.pathname] || 'Admin Portal';
+
+  const prefetchRoute = (to) => {
+    try {
+      if (to === '/admin' && !cache.get('admin_dashboard')) {
+        api.get('/laporan/dashboard').then(({ data }) => cache.set('admin_dashboard', data)).catch(() => {});
+      } else if (to === '/admin/absensi' && !cache.get('admin_absensi_today')) {
+        const todayStr = new Date().toISOString().split('T')[0];
+        api.get('/absensi', { params: { tanggal: todayStr } }).then(({ data }) => cache.set('admin_absensi_today', data.data || [])).catch(() => {});
+      } else if (to === '/admin/pegawai' && !cache.get('admin_pegawais')) {
+        api.get('/pegawai').then(({ data }) => cache.set('admin_pegawais', data.data || [])).catch(() => {});
+      } else if (to === '/admin/akun' && !cache.get('admin_akun_pegawai')) {
+        api.get('/users', { params: { role: 'pegawai' } }).then(({ data }) => cache.set('admin_akun_pegawai', data.data || [])).catch(() => {});
+      } else if (to === '/admin/akun-admin' && !cache.get('admin_akun_admin')) {
+        api.get('/users', { params: { role: 'admin' } }).then(({ data }) => cache.set('admin_akun_admin', data.data || [])).catch(() => {});
+      } else if (to === '/admin/jadwal' && !cache.get('admin_jadwals')) {
+        api.get('/jadwal').then(({ data }) => cache.set('admin_jadwals', data || [])).catch(() => {});
+      } else if (to === '/admin/pengajuan' && !cache.get('admin_pengajuans')) {
+        api.get('/pengajuan').then(({ data }) => cache.set('admin_pengajuans', data.data || [])).catch(() => {});
+      } else if (to === '/admin/laporan') {
+        const m = new Date().getMonth() + 1;
+        const y = new Date().getFullYear();
+        const key = `admin_laporan_${m}_${y}`;
+        if (!cache.get(key)) {
+          api.get('/laporan/absensi', { params: { bulan: m, tahun: y } }).then(({ data }) => cache.set(key, data.laporan || [])).catch(() => {});
+        }
+      }
+    } catch {
+      // Ignore
+    }
+  };
 
   const handleLogout = async () => {
     await logout();
@@ -109,6 +141,8 @@ export default function AdminLayout() {
                   end={end}
                   className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
                   title={!sidebarOpen ? label : undefined}
+                  onMouseEnter={() => prefetchRoute(to)}
+                  onTouchStart={() => prefetchRoute(to)}
                 >
                   <Icon size={19} />
                   {sidebarOpen && <span>{label}</span>}

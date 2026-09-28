@@ -6,6 +6,8 @@ import {
   LogOut, Building2, Menu, X, ChevronDown
 } from 'lucide-react';
 import NotificationDropdown from '../components/NotificationDropdown';
+import api from '../lib/api';
+import cache from '../lib/cache';
 
 const pegawaiNavItems = [
   { to: '/dashboard', icon: LayoutDashboard, label: 'Dashboard Utama', end: true },
@@ -30,6 +32,36 @@ export default function PegawaiLayout() {
   const profileRef = useRef(null);
 
   const activeBreadcrumb = routeBreadcrumbMap[location.pathname] || 'Portal Pegawai';
+
+  const prefetchRoute = (to) => {
+    try {
+      if (to === '/dashboard' && !cache.get('dashboard_pegawai')) {
+        api.get('/laporan/dashboard-pegawai').then(({ data }) => {
+          cache.set('dashboard_pegawai', data);
+          if (data.hari_ini) cache.set('absensi_hari_ini', data.hari_ini);
+        }).catch(() => {});
+      } else if (to === '/absensi' && !cache.get('absensi_hari_ini')) {
+        api.get('/absensi/hari-ini').then(({ data }) => {
+          cache.set('absensi_hari_ini', data);
+        }).catch(() => {});
+      } else if (to === '/pengajuan' && !cache.get('pengajuan_list')) {
+        api.get('/pengajuan').then(({ data }) => {
+          cache.set('pengajuan_list', data.data || []);
+        }).catch(() => {});
+      } else if (to === '/riwayat') {
+        const m = new Date().getMonth() + 1;
+        const y = new Date().getFullYear();
+        const key = `riwayat_${m}_${y}_1`;
+        if (!cache.get(key)) {
+          api.get('/absensi', { params: { bulan: m, tahun: y, page: 1 } }).then(({ data }) => {
+            cache.set(key, data);
+          }).catch(() => {});
+        }
+      }
+    } catch {
+      // Ignore
+    }
+  };
 
   const handleLogout = async () => {
     await logout();
@@ -86,6 +118,8 @@ export default function PegawaiLayout() {
               end={end}
               className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
               title={!sidebarOpen ? label : undefined}
+              onMouseEnter={() => prefetchRoute(to)}
+              onTouchStart={() => prefetchRoute(to)}
             >
               <Icon size={19} />
               {sidebarOpen && <span>{label}</span>}

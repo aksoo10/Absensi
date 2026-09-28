@@ -10,6 +10,7 @@ import {
   ResponsiveContainer, Legend
 } from 'recharts';
 import api from '../../lib/api';
+import cache from '../../lib/cache';
 
 // Custom Tooltip for Recharts
 function CustomChartTooltip({ active, payload, label }) {
@@ -40,18 +41,21 @@ function CustomChartTooltip({ active, payload, label }) {
 }
 
 export default function AdminDashboard() {
-  const [data, setData] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [data, setData] = useState(() => cache.get('admin_dashboard'));
+  const [loading, setLoading] = useState(() => !cache.get('admin_dashboard'));
   const navigate = useNavigate();
 
   useEffect(() => {
     api.get('/laporan/dashboard')
-      .then(({ data }) => setData(data))
+      .then(({ data }) => {
+        setData(data);
+        cache.set('admin_dashboard', data);
+      })
       .catch(console.error)
       .finally(() => setLoading(false));
   }, []);
 
-  if (loading) return <div className="page-loader"><div className="spinner" /></div>;
+  if (loading && !data) return <div className="page-loader"><div className="spinner" /></div>;
 
   const total = data?.total_pegawai || 0;
   const hadir = data?.hadir_hari_ini || 0;
