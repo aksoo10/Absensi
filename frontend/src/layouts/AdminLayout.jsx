@@ -52,41 +52,56 @@ export default function AdminLayout() {
 
   const activeBreadcrumb = routeBreadcrumbMap[location.pathname] || 'Admin Portal';
 
-  // Pre-warm pengajuan cache quietly after initial mount for 0ms transitions
+  // Instant portal bootstrap: Pre-warms all admin menus in a single fast call (~200ms)
   useEffect(() => {
-    const timer = setTimeout(() => {
-      if (cache.get('admin_pengajuans') === null) {
-        cache.fetchDedup('admin_pengajuans_all', () => api.get('/pengajuan')).then(({ data }) => {
-          cache.set('admin_pengajuans', data.data || []);
-        }).catch(() => {});
-      }
-    }, 400);
-    return () => clearTimeout(timer);
+    const isWarmed = cache.get('admin_dashboard') && cache.get('admin_absensi_today');
+    if (!isWarmed) {
+      cache.fetchDedup('admin_bootstrap', () => api.get('/bootstrap/admin'))
+        .then(({ data: boot }) => {
+          if (boot.dashboard) cache.set('admin_dashboard', boot.dashboard);
+          if (boot.absensi_today) cache.set('admin_absensi_today', boot.absensi_today);
+          if (boot.pegawais) cache.set('admin_pegawais', boot.pegawais);
+          if (boot.akun_pegawai) cache.set('admin_akun_pegawai', boot.akun_pegawai);
+          if (boot.akun_admin) cache.set('admin_akun_admin', boot.akun_admin);
+          if (boot.jadwals) cache.set('admin_jadwals', boot.jadwals);
+          if (boot.pengajuans) cache.set('admin_pengajuans', boot.pengajuans);
+          if (boot.notifikasi) cache.set('notifikasi', boot.notifikasi);
+        })
+        .catch(() => {});
+    }
   }, []);
 
   const prefetchRoute = (to) => {
     try {
       if (to === '/admin' && !cache.get('admin_dashboard')) {
-        api.get('/laporan/dashboard').then(({ data }) => cache.set('admin_dashboard', data)).catch(() => {});
+        cache.fetchDedup('admin_dashboard', () => api.get('/laporan/dashboard'))
+          .then(({ data }) => cache.set('admin_dashboard', data)).catch(() => {});
       } else if (to === '/admin/absensi' && !cache.get('admin_absensi_today')) {
         const todayStr = new Date().toISOString().split('T')[0];
-        api.get('/absensi', { params: { tanggal: todayStr } }).then(({ data }) => cache.set('admin_absensi_today', data.data || [])).catch(() => {});
+        cache.fetchDedup(`absensi_${todayStr}`, () => api.get('/absensi', { params: { tanggal: todayStr } }))
+          .then(({ data }) => cache.set('admin_absensi_today', data.data || [])).catch(() => {});
       } else if (to === '/admin/pegawai' && !cache.get('admin_pegawais')) {
-        api.get('/pegawai').then(({ data }) => cache.set('admin_pegawais', data.data || [])).catch(() => {});
+        cache.fetchDedup('admin_pegawais_all', () => api.get('/pegawai', { params: { per_page: 50 } }))
+          .then(({ data }) => cache.set('admin_pegawais', data.data || [])).catch(() => {});
       } else if (to === '/admin/akun' && !cache.get('admin_akun_pegawai')) {
-        api.get('/users', { params: { role: 'pegawai' } }).then(({ data }) => cache.set('admin_akun_pegawai', data.data || [])).catch(() => {});
+        cache.fetchDedup('admin_akun_pegawai_all', () => api.get('/users', { params: { role: 'pegawai', per_page: 50 } }))
+          .then(({ data }) => cache.set('admin_akun_pegawai', data.data || [])).catch(() => {});
       } else if (to === '/admin/akun-admin' && !cache.get('admin_akun_admin')) {
-        api.get('/users', { params: { role: 'admin' } }).then(({ data }) => cache.set('admin_akun_admin', data.data || [])).catch(() => {});
+        cache.fetchDedup('admin_akun_admin_all', () => api.get('/users', { params: { role: 'admin' } }))
+          .then(({ data }) => cache.set('admin_akun_admin', data.data || [])).catch(() => {});
       } else if (to === '/admin/jadwal' && !cache.get('admin_jadwals')) {
-        api.get('/jadwal').then(({ data }) => cache.set('admin_jadwals', data || [])).catch(() => {});
+        cache.fetchDedup('admin_jadwals', () => api.get('/jadwal'))
+          .then(({ data }) => cache.set('admin_jadwals', data || [])).catch(() => {});
       } else if (to === '/admin/pengajuan' && cache.get('admin_pengajuans') === null) {
-        cache.fetchDedup('admin_pengajuans_all', () => api.get('/pengajuan')).then(({ data }) => cache.set('admin_pengajuans', data.data || [])).catch(() => {});
+        cache.fetchDedup('admin_pengajuans_all', () => api.get('/pengajuan'))
+          .then(({ data }) => cache.set('admin_pengajuans', data.data || [])).catch(() => {});
       } else if (to === '/admin/laporan') {
         const m = new Date().getMonth() + 1;
         const y = new Date().getFullYear();
         const key = `admin_laporan_${m}_${y}`;
         if (!cache.get(key)) {
-          api.get('/laporan/absensi', { params: { bulan: m, tahun: y } }).then(({ data }) => cache.set(key, data.laporan || [])).catch(() => {});
+          cache.fetchDedup(key, () => api.get('/laporan/absensi', { params: { bulan: m, tahun: y } }))
+            .then(({ data }) => cache.set(key, data.laporan || [])).catch(() => {});
         }
       }
     } catch {

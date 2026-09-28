@@ -155,4 +155,25 @@ class PengajuanController extends Controller
         $namaFile = $request->name ?: basename($path);
         return Storage::disk('public')->download($path, $namaFile);
     }
+
+    /**
+     * Preview dokumen lampiran (inline view dengan CORS & Cache header)
+     */
+    public function previewPublic(Request $request)
+    {
+        $path = $request->path;
+        if (!$path || !Storage::disk('public')->exists($path)) {
+            return response()->json(['message' => 'File lampiran tidak ditemukan di server'], 404);
+        }
+
+        $filePath = Storage::disk('public')->path($path);
+        $mime = mime_content_type($filePath) ?: 'application/octet-stream';
+
+        return response()->file($filePath, [
+            'Content-Type' => $mime,
+            'Cache-Control' => 'public, max-age=86400',
+            'Access-Control-Allow-Origin' => '*',
+            'Content-Disposition' => 'inline; filename="' . basename($path) . '"',
+        ]);
+    }
 }

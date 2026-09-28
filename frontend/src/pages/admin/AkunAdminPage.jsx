@@ -1,8 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import {
   ShieldCheck, Plus, Search, KeyRound, Edit2, Trash2,
   Mail, Check, Copy, Eye, EyeOff, AlertCircle, RefreshCw,
-  X, UserCheck
+  X, UserCheck, Loader2
 } from 'lucide-react';
 import api from '../../lib/api';
 import cache from '../../lib/cache';
@@ -10,9 +10,11 @@ import { useAuth } from '../../contexts/AuthContext';
 
 export default function AkunAdminPage() {
   const { user: currentUser, updateUser } = useAuth();
-  const [admins, setAdmins] = useState(() => cache.get('admin_akun_admin') || []);
-  const [loading, setLoading] = useState(() => !cache.get('admin_akun_admin'));
+  const cached = cache.get('admin_akun_admin');
+  const [admins, setAdmins] = useState(() => cached || []);
+  const [loading, setLoading] = useState(() => cached === null);
   const [search, setSearch] = useState('');
+  const [searching, setSearching] = useState(false);
 
   // Modal State
   const [showAccountModal, setShowAccountModal] = useState(false);
@@ -36,37 +38,68 @@ export default function AkunAdminPage() {
   const [successMsg, setSuccessMsg] = useState('');
   const [copiedId, setCopiedId] = useState(null);
 
-  const fetchAdmins = () => {
-    if (admins.length === 0 || search) setLoading(true);
-    api.get('/users', {
-      params: {
-        search: search || undefined,
-        role: 'admin'
-      }
-    })
+  const filteredAdmins = useMemo(() => {
+    if (!search.trim()) return admins;
+    const q = search.toLowerCase();
+    return admins.filter((a) =>
+      (a.name && a.name.toLowerCase().includes(q)) ||
+      (a.email && a.email.toLowerCase().includes(q))
+    );
+  }, [admins, search]);
+
+  const fetchAdmins = (q = '', isBackground = false) => {
+    if (!isBackground && cache.get('admin_akun_admin') === null) setLoading(true);
+    if (isBackground) setSearching(true);
+
+    cache.fetchDedup(`admin_akun_admin_${q || 'all'}`, () =>
+      api.get('/users', {
+        params: {
+          search: q || undefined,
+          role: 'admin'
+        }
+      })
+    )
       .then(({ data }) => {
         const list = data.data || [];
-        setAdmins(list);
-        if (!search) cache.set('admin_akun_admin', list);
+        if (!q) {
+          setAdmins(list);
+          cache.set('admin_akun_admin', list);
+        } else {
+          setAdmins((prev) => {
+            const map = new Map(prev.map((item) => [item.id, item]));
+            for (const item of list) {
+              map.set(item.id, item);
+            }
+            return Array.from(map.values());
+          });
+        }
       })
       .catch(console.error)
-      .finally(() => setLoading(false));
+      .finally(() => {
+        setLoading(false);
+        setSearching(false);
+      });
   };
 
   useEffect(() => {
     fetchAdmins();
   }, []);
 
+  useEffect(() => {
+    if (!search.trim()) return;
+    const timer = setTimeout(() => {
+      fetchAdmins(search.trim(), true);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [search]);
+
   const handleSearch = (e) => {
     e.preventDefault();
-    fetchAdmins();
+    fetchAdmins(search.trim(), true);
   };
 
   const handleClearSearch = () => {
     setSearch('');
-    api.get('/users', { params: { role: 'admin' } })
-      .then(({ data }) => setAdmins(data.data || []))
-      .catch(console.error);
   };
 
   // Open Add Modal
@@ -285,21 +318,21 @@ export default function AkunAdminPage() {
               </tr>
             </thead>
             <tbody>
-              {loading && admins.length === 0 ? (
+              {loading && cache.get('admin_akun_admin') === null ? (
                 <tr>
                   <td colSpan="5" style={{ textAlign: 'center', padding: '40px' }}>
                     <div className="spinner" style={{ margin: '0 auto 10px' }} />
                     <span style={{ color: 'var(--text-muted)', fontSize: '13px' }}>Memuat data akun administrator...</span>
                   </td>
                 </tr>
-              ) : admins.length === 0 ? (
+              ) : filteredAdmins.length === 0 ? (
                 <tr>
                   <td colSpan="5" className="empty-row" style={{ textAlign: 'center', padding: '40px' }}>
                     Tidak ada akun administrator yang sesuai kriteria pencarian
                   </td>
                 </tr>
               ) : (
-                admins.map((admin) => {
+                filteredAdmins.map((admin) => {
                   const isSelf = admin.id === currentUser?.id;
                   return (
                     <tr key={admin.id}>

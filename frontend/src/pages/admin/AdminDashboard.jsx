@@ -41,12 +41,13 @@ function CustomChartTooltip({ active, payload, label }) {
 }
 
 export default function AdminDashboard() {
-  const [data, setData] = useState(() => cache.get('admin_dashboard'));
-  const [loading, setLoading] = useState(() => !cache.get('admin_dashboard'));
+  const cached = cache.get('admin_dashboard');
+  const [data, setData] = useState(() => cached);
+  const [loading, setLoading] = useState(() => cached === null);
   const navigate = useNavigate();
 
   useEffect(() => {
-    api.get('/laporan/dashboard')
+    cache.fetchDedup('admin_dashboard', () => api.get('/laporan/dashboard'))
       .then(({ data }) => {
         setData(data);
         cache.set('admin_dashboard', data);

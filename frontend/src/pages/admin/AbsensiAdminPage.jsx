@@ -7,19 +7,30 @@ import api from '../../lib/api';
 import cache from '../../lib/cache';
 
 export default function AbsensiAdminPage() {
-  const [absensis, setAbsensis] = useState(() => cache.get('admin_absensi_today') || []);
-  const [loading, setLoading] = useState(() => !cache.get('admin_absensi_today'));
+  const isInitialToday = true;
+  const cachedToday = cache.get('admin_absensi_today');
+  const [absensis, setAbsensis] = useState(() => cachedToday || []);
+  const [loading, setLoading] = useState(() => cachedToday === null);
   const [tanggal, setTanggal] = useState(new Date().toISOString().split('T')[0]);
   const [filterStatus, setFilterStatus] = useState('all');
 
   const fetchAbsensi = () => {
     const isToday = tanggal === new Date().toISOString().split('T')[0];
-    if (absensis.length === 0) setLoading(true);
-    api.get('/absensi', { params: { tanggal } })
+    const cacheKey = isToday ? 'admin_absensi_today' : `admin_absensi_${tanggal}`;
+    const cached = cache.get(cacheKey);
+
+    if (cached !== null) {
+      setAbsensis(cached);
+      setLoading(false);
+    } else {
+      setLoading(true);
+    }
+
+    cache.fetchDedup(`absensi_${tanggal}`, () => api.get('/absensi', { params: { tanggal } }))
       .then(({ data }) => {
         const list = data.data || [];
         setAbsensis(list);
-        if (isToday) cache.set('admin_absensi_today', list);
+        cache.set(cacheKey, list);
       })
       .catch(console.error)
       .finally(() => setLoading(false));
@@ -166,7 +177,7 @@ export default function AbsensiAdminPage() {
         </div>
 
         <div className="table-wrapper">
-          {loading && absensis.length === 0 ? (
+          {loading && cache.get(tanggal === new Date().toISOString().split('T')[0] ? 'admin_absensi_today' : `admin_absensi_${tanggal}`) === null ? (
             <div className="table-loader"><div className="spinner" /></div>
           ) : (
             <table className="data-table">

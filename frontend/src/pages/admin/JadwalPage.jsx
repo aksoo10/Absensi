@@ -6,8 +6,9 @@ import cache from '../../lib/cache';
 const HARI = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Minggu'];
 
 export default function JadwalPage() {
-  const [jadwals, setJadwals] = useState(() => cache.get('admin_jadwals') || []);
-  const [loading, setLoading] = useState(() => !cache.get('admin_jadwals'));
+  const cached = cache.get('admin_jadwals');
+  const [jadwals, setJadwals] = useState(() => cached || []);
+  const [loading, setLoading] = useState(() => cached === null);
   const [showModal, setShowModal] = useState(false);
   const [editData, setEditData] = useState(null);
   const [form, setForm] = useState({
@@ -21,9 +22,9 @@ export default function JadwalPage() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
 
-  const fetchJadwal = () => {
-    if (jadwals.length === 0) setLoading(true);
-    api.get('/jadwal')
+  const fetchJadwal = (isBackground = false) => {
+    if (!isBackground && cache.get('admin_jadwals') === null) setLoading(true);
+    cache.fetchDedup('admin_jadwals', () => api.get('/jadwal'))
       .then(({ data }) => {
         const list = data || [];
         setJadwals(list);
@@ -34,7 +35,7 @@ export default function JadwalPage() {
   };
 
   useEffect(() => {
-    fetchJadwal();
+    fetchJadwal(Boolean(cached));
   }, []);
 
   const toggleHari = (hari) => {
@@ -124,7 +125,7 @@ export default function JadwalPage() {
       </div>
 
       <div className="cards-grid">
-        {loading && jadwals.length === 0 ? (
+        {loading && cache.get('admin_jadwals') === null ? (
           <div className="page-loader"><div className="spinner" /></div>
         ) : jadwals.length === 0 ? (
           <div className="card" style={{ gridColumn: '1/-1' }}>

@@ -75,6 +75,30 @@ export function AuthProvider({ children }) {
     localStorage.setItem('token', data.token);
     localStorage.setItem('user', JSON.stringify(data.user));
     setUser(data.user);
+
+    // Pre-warm bootstrap in background immediately upon login so all menus are pre-cached
+    const bootstrapUrl = data.user?.role === 'admin' ? '/bootstrap/admin' : '/bootstrap/pegawai';
+    const dedupKey = data.user?.role === 'admin' ? 'admin_bootstrap' : 'pegawai_bootstrap';
+    cache.fetchDedup(dedupKey, () => api.get(bootstrapUrl, {
+      headers: { Authorization: `Bearer ${data.token}` }
+    })).then(({ data: boot }) => {
+      if (data.user?.role === 'admin') {
+        if (boot.dashboard) cache.set('admin_dashboard', boot.dashboard);
+        if (boot.absensi_today) cache.set('admin_absensi_today', boot.absensi_today);
+        if (boot.pegawais) cache.set('admin_pegawais', boot.pegawais);
+        if (boot.akun_pegawai) cache.set('admin_akun_pegawai', boot.akun_pegawai);
+        if (boot.akun_admin) cache.set('admin_akun_admin', boot.akun_admin);
+        if (boot.jadwals) cache.set('admin_jadwals', boot.jadwals);
+        if (boot.pengajuans) cache.set('admin_pengajuans', boot.pengajuans);
+        if (boot.notifikasi) cache.set('notifikasi', boot.notifikasi);
+      } else {
+        if (boot.dashboard_pegawai) cache.set('dashboard_pegawai', boot.dashboard_pegawai);
+        if (boot.absensi_hari_ini) cache.set('absensi_hari_ini', boot.absensi_hari_ini);
+        if (boot.pengajuans) cache.set('pengajuan_list', boot.pengajuans);
+        if (boot.notifikasi) cache.set('notifikasi', boot.notifikasi);
+      }
+    }).catch(() => {});
+
     return data.user;
   };
 

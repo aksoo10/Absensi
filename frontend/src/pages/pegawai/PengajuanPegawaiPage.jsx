@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import {
   Plus, CheckCircle, XCircle, Clock, Upload, FileText,
-  Calendar, AlertCircle, X, ArrowLeft, Eye, ExternalLink, Download
+  Calendar, AlertCircle, X, ArrowLeft, Eye, ExternalLink, Download,
+  Loader2, RefreshCw
 } from 'lucide-react';
 import api, { BACKEND_URL } from '../../lib/api';
 import cache from '../../lib/cache';
@@ -18,17 +19,47 @@ const STATUS_MAP = {
   ditolak: { label: 'Ditolak', class: 'badge-danger', icon: XCircle },
 };
 
+export const getPreviewUrl = (dokumenPath) => {
+  if (!dokumenPath) return '';
+  if (dokumenPath.startsWith('http://') || dokumenPath.startsWith('https://')) {
+    return dokumenPath;
+  }
+  // Try Vite proxy /storage first or backend inline preview endpoint with CORS & caching
+  return `/storage/${dokumenPath}`;
+};
+
+export const preloadImage = (dokumenPath) => {
+  if (!dokumenPath || dokumenPath.toLowerCase().endsWith('.pdf')) return;
+  const img = new Image();
+  img.src = getPreviewUrl(dokumenPath);
+};
+
 export default function PengajuanPegawaiPage() {
   const cached = cache.get('pengajuan_list');
   const [pengajuans, setPengajuans] = useState(() => cached || []);
   const [loading, setLoading] = useState(() => cached === null);
   const [showModal, setShowModal] = useState(false);
   const [previewDoc, setPreviewDoc] = useState(null);
+  const [docLoaded, setDocLoaded] = useState(false);
+  const [docError, setDocError] = useState(false);
   const [downloading, setDownloading] = useState(false);
   const [form, setForm] = useState({ jenis: 'izin', tanggal_mulai: '', tanggal_selesai: '', alasan: '' });
   const [dokumen, setDokumen] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
+
+  const openPreview = (item) => {
+    setDocLoaded(false);
+    setDocError(false);
+    setPreviewDoc({
+      id: item.id,
+      dokumen: item.dokumen,
+      url: getPreviewUrl(item.dokumen),
+      pemohon: 'Saya',
+      jenis: JENIS_MAP[item.jenis] || item.jenis,
+      alasan: item.alasan,
+    });
+  };
 
   const handleDownloadDoc = async () => {
     if (!previewDoc) return;
@@ -85,6 +116,17 @@ export default function PengajuanPegawaiPage() {
   useEffect(() => {
     fetchPengajuan(Boolean(cached));
   }, []);
+
+  // Pre-warm document previews in the browser cache so clicking 'Lihat Lampiran' is instantaneous (0 ms)
+  useEffect(() => {
+    if (pengajuans && pengajuans.length > 0) {
+      pengajuans.forEach((p) => {
+        if (p.dokumen) {
+          preloadImage(p.dokumen);
+        }
+      });
+    }
+  }, [pengajuans]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -177,14 +219,8 @@ export default function PengajuanPegawaiPage() {
                           {p.dokumen && (
                             <button
                               type="button"
-                              onClick={() => setPreviewDoc({
-                                id: p.id,
-                                dokumen: p.dokumen,
-                                url: `${BACKEND_URL}/storage/${p.dokumen}`,
-                                pemohon: 'Saya',
-                                jenis: JENIS_MAP[p.jenis] || p.jenis,
-                                alasan: p.alasan,
-                              })}
+                              onClick={() => openPreview(p)}
+                              onMouseEnter={() => preloadImage(p.dokumen)}
                               style={{
                                 background: 'none',
                                 border: 'none',
@@ -359,7 +395,7 @@ export default function PengajuanPegawaiPage() {
               border: '1px solid rgba(255, 255, 255, 0.15)'
             }}
           >
-            {/* Top Bar (Header with Title & Close Button) */}
+            {/* Top Bar (Header with Title & Actions) */}
             <div
               className="modal-header"
               style={{
@@ -376,19 +412,40 @@ export default function PengajuanPegawaiPage() {
                   Lampiran Dokumen Bukti
                 </h4>
                 <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>
-                  {previewDoc.jenis}
+                  {previewDoc.pemohon} &bull; {previewDoc.jenis}
                 </div>
               </div>
 
-              <button
-                type="button"
-                className="modal-close"
-                onClick={() => setPreviewDoc(null)}
-                style={{ fontSize: '20px' }}
-                title="Tutup"
-              >
-                &times;
-              </button>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <a
+                  href={previewDoc.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="btn btn-secondary btn-sm"
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '5px',
+                    fontSize: '12px',
+                    padding: '5px 10px',
+                    textDecoration: 'none'
+                  }}
+                  title="Buka dokumen di tab baru"
+                >
+                  <ExternalLink size={13} />
+                  <span>Tab Baru</span>
+                </a>
+
+                <button
+                  type="button"
+                  className="modal-close"
+                  onClick={() => setPreviewDoc(null)}
+                  style={{ fontSize: '20px' }}
+                  title="Tutup"
+                >
+                  &times;
+                </button>
+              </div>
             </div>
 
             {/* Document Viewer Body */}
@@ -398,24 +455,117 @@ export default function PengajuanPegawaiPage() {
                 padding: '16px',
                 background: '#090d16',
                 display: 'flex',
+                flexDirection: 'column',
                 alignItems: 'center',
                 justifyContent: 'center',
                 overflow: 'auto',
-                minHeight: '350px',
-                maxHeight: 'calc(92vh - 135px)'
+                minHeight: '380px',
+                maxHeight: 'calc(92vh - 135px)',
+                position: 'relative'
               }}
             >
+              {/* Animated Loading State */}
+              {!docLoaded && !docError && (
+                <div style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  gap: '12px',
+                  padding: '50px 20px',
+                  textAlign: 'center'
+                }}>
+                  <Loader2 className="animate-spin" size={38} style={{ color: 'var(--primary)' }} />
+                  <div>
+                    <div style={{ fontSize: '14px', fontWeight: '600', color: '#fff' }}>
+                      Memuat Lampiran Dokumen...
+                    </div>
+                    <div style={{ fontSize: '12px', color: '#94a3b8', marginTop: '3px' }}>
+                      Menyiapkan pratinjau bukti untuk Anda
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Error State */}
+              {docError && (
+                <div style={{
+                  textAlign: 'center',
+                  padding: '40px 20px',
+                  maxWidth: '440px'
+                }}>
+                  <div style={{
+                    width: '56px',
+                    height: '56px',
+                    borderRadius: '50%',
+                    background: 'rgba(239, 68, 68, 0.12)',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    marginBottom: '14px',
+                    color: '#ef4444'
+                  }}>
+                    <AlertCircle size={28} />
+                  </div>
+                  <h5 style={{ margin: '0 0 6px 0', fontSize: '15px', fontWeight: '700', color: '#fff' }}>
+                    Pratinjau Tidak Dapat Ditampilkan
+                  </h5>
+                  <p style={{ margin: '0 0 20px 0', fontSize: '12.5px', color: '#94a3b8', lineHeight: 1.5 }}>
+                    Dokumen tidak dapat dimuat langsung di browser. Anda dapat mencoba memuat ulang atau langsung mengunduh file lampiran.
+                  </p>
+                  <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
+                    <button
+                      type="button"
+                      className="btn btn-secondary btn-sm"
+                      onClick={() => {
+                        setDocError(false);
+                        setDocLoaded(false);
+                      }}
+                      style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+                    >
+                      <RefreshCw size={13} /> Coba Muat Ulang
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-primary btn-sm"
+                      onClick={handleDownloadDoc}
+                      style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+                    >
+                      <Download size={13} /> Unduh File
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Preview Content */}
               {previewDoc.url.toLowerCase().endsWith('.pdf') ? (
                 <iframe
                   src={previewDoc.url}
                   title="Preview Dokumen PDF"
-                  style={{ width: '100%', height: '540px', border: 'none', borderRadius: '8px' }}
+                  onLoad={() => setDocLoaded(true)}
+                  onError={() => {
+                    setDocLoaded(true);
+                    setDocError(true);
+                  }}
+                  style={{
+                    display: docLoaded && !docError ? 'block' : 'none',
+                    width: '100%',
+                    height: '560px',
+                    border: 'none',
+                    borderRadius: '8px',
+                    background: '#fff'
+                  }}
                 />
               ) : (
                 <img
                   src={previewDoc.url}
                   alt="Lampiran Dokumen Pengajuan"
+                  onLoad={() => setDocLoaded(true)}
+                  onError={() => {
+                    setDocLoaded(true);
+                    setDocError(true);
+                  }}
                   style={{
+                    display: docLoaded && !docError ? 'block' : 'none',
                     maxWidth: '100%',
                     maxHeight: 'calc(92vh - 160px)',
                     objectFit: 'contain',
@@ -464,7 +614,15 @@ export default function PengajuanPegawaiPage() {
                   fontWeight: '600'
                 }}
               >
-                <Download size={15} /> {downloading ? 'Mengunduh...' : 'Unduh File'}
+                {downloading ? (
+                  <>
+                    <Loader2 size={15} className="animate-spin" /> Mengunduh...
+                  </>
+                ) : (
+                  <>
+                    <Download size={15} /> Unduh File
+                  </>
+                )}
               </button>
             </div>
           </div>

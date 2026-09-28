@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Api\AbsensiController;
 use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Api\BootstrapController;
 use App\Http\Controllers\Api\JadwalKerjaController;
 use App\Http\Controllers\Api\LaporanController;
 use App\Http\Controllers\Api\NotifikasiController;
@@ -14,9 +15,14 @@ use Illuminate\Support\Facades\Route;
 Route::post('/login', [AuthController::class, 'login']);
 Route::post('/register', [AuthController::class, 'register']);
 Route::get('/public/download-dokumen', [PengajuanController::class, 'downloadPublic']);
+Route::get('/public/preview-dokumen', [PengajuanController::class, 'previewPublic']);
 
 // ─── Protected Routes (Sanctum) ──────────────────────────────────
 Route::middleware('auth:sanctum')->group(function () {
+
+    // Bootstrap Pre-warm (Unified fast loading)
+    Route::get('/bootstrap/admin', [BootstrapController::class, 'admin']);
+    Route::get('/bootstrap/pegawai', [BootstrapController::class, 'pegawai']);
 
     // Auth & Notifikasi
     Route::post('/logout', [AuthController::class, 'logout']);

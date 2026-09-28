@@ -33,16 +33,19 @@ export default function PegawaiLayout() {
 
   const activeBreadcrumb = routeBreadcrumbMap[location.pathname] || 'Portal Pegawai';
 
-  // Pre-warm critical pages cache quietly after initial mount for 0ms transitions
+  // Instant portal bootstrap: Pre-warms all pegawai menus in a single fast call (~200ms)
   useEffect(() => {
-    const timer = setTimeout(() => {
-      if (cache.get('pengajuan_list') === null) {
-        cache.fetchDedup('pengajuan_list', () => api.get('/pengajuan')).then(({ data }) => {
-          cache.set('pengajuan_list', data.data || []);
-        }).catch(() => {});
-      }
-    }, 300);
-    return () => clearTimeout(timer);
+    const isWarmed = cache.get('dashboard_pegawai') && cache.get('absensi_hari_ini');
+    if (!isWarmed) {
+      cache.fetchDedup('pegawai_bootstrap', () => api.get('/bootstrap/pegawai'))
+        .then(({ data: boot }) => {
+          if (boot.dashboard_pegawai) cache.set('dashboard_pegawai', boot.dashboard_pegawai);
+          if (boot.absensi_hari_ini) cache.set('absensi_hari_ini', boot.absensi_hari_ini);
+          if (boot.pengajuans) cache.set('pengajuan_list', boot.pengajuans);
+          if (boot.notifikasi) cache.set('notifikasi', boot.notifikasi);
+        })
+        .catch(() => {});
+    }
   }, []);
 
   const prefetchRoute = (to) => {

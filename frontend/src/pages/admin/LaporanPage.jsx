@@ -11,19 +11,21 @@ export default function LaporanPage() {
   const [bulan, setBulan] = useState(currentMonth);
   const [tahun, setTahun] = useState(currentYear);
   const [laporan, setLaporan] = useState(() => cache.get(initialCacheKey) || []);
-  const [loading, setLoading] = useState(() => !cache.get(initialCacheKey));
+  const [loading, setLoading] = useState(() => cache.get(initialCacheKey) === null);
 
   const fetchLaporan = () => {
     const key = `admin_laporan_${bulan}_${tahun}`;
     const cached = cache.get(key);
-    if (cached) {
+    if (cached !== null) {
       setLaporan(cached);
       setLoading(false);
     } else {
       setLoading(true);
     }
 
-    api.get('/laporan/absensi', { params: { bulan, tahun } })
+    cache.fetchDedup(`admin_laporan_${bulan}_${tahun}`, () =>
+      api.get('/laporan/absensi', { params: { bulan, tahun } })
+    )
       .then(({ data }) => {
         const list = data.laporan || [];
         setLaporan(list);
@@ -190,7 +192,7 @@ export default function LaporanPage() {
                 </tr>
               </thead>
               <tbody>
-                {loading && laporan.length === 0 ? (
+                {loading && cache.get(`admin_laporan_${bulan}_${tahun}`) === null ? (
                   <tr>
                     <td colSpan={12} style={{ textAlign: 'center', padding: '40px' }}>
                       <div className="spinner" style={{ margin: '0 auto 10px' }} />
