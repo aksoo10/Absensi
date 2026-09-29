@@ -16,6 +16,8 @@ export default function AkunPage() {
   // Modal State
   const [showAccountModal, setShowAccountModal] = useState(false);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [userToDelete, setUserToDelete] = useState(null);
+  const [deleting, setDeleting] = useState(false);
   const [selectedUser, setSelectedUser] = useState(null);
 
   // Form Account (Add / Edit)
@@ -42,13 +44,16 @@ export default function AkunPage() {
     if (!isBackground && users.length === 0) setLoading(true);
     if (isBackground) setSearching(true);
 
-    api.get('/users', {
-      params: {
-        search: q || undefined,
-        role: 'pegawai',
-        per_page: 50
-      }
-    })
+    const dedupKey = `admin_akun_pegawai_${q || 'all'}`;
+    cache.fetchDedup(dedupKey, () =>
+      api.get('/users', {
+        params: {
+          search: q || undefined,
+          role: 'pegawai',
+          per_page: 50
+        }
+      })
+    )
       .then(({ data }) => {
         const list = data.data || [];
         if (!q) {
@@ -204,18 +209,39 @@ export default function AkunPage() {
     }
   };
 
-  // Delete Account
-  const handleDeleteUser = async (u) => {
-    if (!confirm(`Hapus akun pegawai "${u.name}" (${u.email})? Tindakan ini tidak dapat dibatalkan.`)) return;
+  // Delete Account - Optimistic & Instantaneous (0 ms)
+  const handleOpenDelete = (u) => {
+    setUserToDelete(u);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!userToDelete) return;
+    const target = userToDelete;
+    setDeleting(true);
+
+    // 1. Optimistic removal: instantaneous deletion from table (0 ms)
+    const previousUsers = [...users];
+    const updatedUsers = users.filter((u) => u.id !== target.id);
+    setUsers(updatedUsers);
+    cache.set('admin_akun_pegawai', updatedUsers);
+    cache.remove('admin_pegawais');
+
+    setUserToDelete(null);
+    setDeleting(false);
+
+    setSuccessMsg(`Akun pegawai "${target.name}" (${target.email}) berhasil dihapus.`);
+    setTimeout(() => setSuccessMsg(''), 4000);
+
+    // 2. Perform server deletion in the background
     try {
-      await api.delete(`/users/${u.id}`);
-      cache.remove('admin_akun_pegawai');
-      cache.remove('admin_pegawais');
-      setSuccessMsg(`Akun ${u.email} berhasil dihapus.`);
-      fetchUsers();
-      setTimeout(() => setSuccessMsg(''), 4000);
+      await api.delete(`/users/${target.id}`);
+      // Background sync quietly
+      fetchUsers('', true);
     } catch (err) {
-      alert(err.response?.data?.message || 'Gagal menghapus akun');
+      // Rollback on failure
+      setUsers(previousUsers);
+      cache.set('admin_akun_pegawai', previousUsers);
+      alert(err.response?.data?.message || 'Gagal menghapus akun pegawai dari server');
     }
   };
 
@@ -474,8 +500,9 @@ export default function AkunPage() {
                         {/* Delete Account */}
                         <button
                           className="btn-icon btn-delete"
-                          onClick={() => handleDeleteUser(u)}
+                          onClick={() => handleOpenDelete(u)}
                           title="Hapus akun pegawai"
+                          aria-label={`Hapus akun ${u.name}`}
                         >
                           <Trash2 size={14} />
                         </button>
@@ -713,6 +740,121 @@ export default function AkunPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ─── MODAL 3: KONFIRMASI HAPUS AKUN ────────────────────── */}
+      {userToDelete && (
+        <div className="modal-overlay" onClick={() => !deleting && setUserToDelete(null)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '440px' }}>
+            <div className="modal-header" style={{ borderBottom: '1px solid var(--border)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <div style={{
+                  width: '36px',
+                  height: '36px',
+                  borderRadius: '10px',
+                  background: 'rgba(239, 68, 68, 0.12)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: 'var(--danger)'
+                }}>
+                  <Trash2 size={18} />
+                </div>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: '16px', fontWeight: '700', color: 'var(--text)' }}>
+                    Hapus Akun Pegawai
+                  </h3>
+                  <p style={{ margin: '2px 0 0', fontSize: '12px', color: 'var(--text-muted)' }}>
+                    Konfirmasi penghapusan akun login
+                  </p>
+                </div>
+              </div>
+              <button
+                className="modal-close"
+                onClick={() => !deleting && setUserToDelete(null)}
+                disabled={deleting}
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="modal-body" style={{ padding: '20px 24px' }}>
+              <p style={{ fontSize: '13.5px', color: 'var(--text-secondary)', lineHeight: 1.5, margin: '0 0 16px' }}>
+                Apakah Anda yakin ingin menghapus akun login untuk pegawai ini?
+              </p>
+
+              <div style={{
+                background: 'var(--bg)',
+                border: '1px solid var(--border)',
+                borderRadius: '8px',
+                padding: '12px 16px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px'
+              }}>
+                <div className="avatar avatar-pegawai" style={{ width: '38px', height: '38px', fontSize: '14px', flexShrink: 0 }}>
+                  {userToDelete.name?.[0]?.toUpperCase() || 'P'}
+                </div>
+                <div style={{ overflow: 'hidden' }}>
+                  <div style={{ fontWeight: '700', color: 'var(--text)', fontSize: '14px' }}>
+                    {userToDelete.name}
+                  </div>
+                  <div style={{ fontSize: '12.5px', color: 'var(--primary)', fontWeight: '500' }}>
+                    {userToDelete.email}
+                  </div>
+                  <div style={{ fontSize: '11.5px', color: 'var(--text-muted)' }}>
+                    {userToDelete.pegawai?.jabatan || 'Staf Perangkat Desa'}
+                  </div>
+                </div>
+              </div>
+
+              <div style={{
+                marginTop: '14px',
+                padding: '10px 12px',
+                borderRadius: '6px',
+                background: 'rgba(239, 68, 68, 0.08)',
+                color: '#dc2626',
+                fontSize: '12px',
+                display: 'flex',
+                gap: '8px',
+                alignItems: 'flex-start'
+              }}>
+                <AlertCircle size={15} style={{ flexShrink: 0, marginTop: '1px' }} />
+                <span>Pegawai tidak akan dapat login lagi ke sistem absensi. Tindakan ini bersifat permanen.</span>
+              </div>
+            </div>
+
+            <div className="modal-footer" style={{ borderTop: '1px solid var(--border)', padding: '14px 24px', display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+              <button
+                type="button"
+                className="btn btn-outline"
+                onClick={() => setUserToDelete(null)}
+                disabled={deleting}
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                className="btn btn-danger"
+                onClick={handleConfirmDelete}
+                disabled={deleting}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+              >
+                {deleting ? (
+                  <>
+                    <Loader2 size={15} className="spinner" style={{ animation: 'spin 0.7s linear infinite' }} />
+                    <span>Menghapus...</span>
+                  </>
+                ) : (
+                  <>
+                    <Trash2 size={15} />
+                    <span>Ya, Hapus Akun</span>
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         </div>
       )}

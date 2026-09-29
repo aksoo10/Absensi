@@ -90,7 +90,7 @@ class LaporanController extends Controller
             'tipe' => 'nullable|in:bulanan,mingguan',
             'bulan' => 'nullable|integer|between:1,12',
             'tahun' => 'nullable|integer|min:2020|max:2099',
-            'minggu' => 'nullable|integer|between:1,5',
+            'minggu' => 'nullable|integer|between:1,6',
             'start_date' => 'nullable|date',
             'end_date' => 'nullable|date',
             'pegawai_id' => 'nullable|exists:pegawais,id',
@@ -113,35 +113,67 @@ class LaporanController extends Controller
             $endDate = $request->end_date;
             $periodeLabel = Carbon::parse($startDate)->locale('id')->isoFormat('D MMM Y') . ' s/d ' . Carbon::parse($endDate)->locale('id')->isoFormat('D MMM Y');
         } elseif ($tipe === 'mingguan') {
-            $lastDayOfMonth = (int) date('t', strtotime(sprintf('%04d-%02d-01', $tahun, $bulan)));
-            switch ($minggu) {
-                case 1:
-                    $startDay = 1;
-                    $endDay = min(7, $lastDayOfMonth);
-                    break;
-                case 2:
-                    $startDay = 8;
-                    $endDay = min(14, $lastDayOfMonth);
-                    break;
-                case 3:
-                    $startDay = 15;
-                    $endDay = min(21, $lastDayOfMonth);
-                    break;
-                case 4:
-                    $startDay = 22;
-                    $endDay = min(28, $lastDayOfMonth);
-                    break;
-                case 5:
-                default:
-                    $startDay = 29;
-                    $endDay = $lastDayOfMonth;
-                    break;
+            $totalDays = (int) date('t', strtotime(sprintf('%04d-%02d-01', $tahun, $bulan)));
+            $weeks = [];
+            $curDay = 1;
+            $wIndex = 1;
+
+            $namaHari = [
+                1 => 'Senin', 2 => 'Selasa', 3 => 'Rabu',
+                4 => 'Kamis', 5 => 'Jumat', 6 => 'Sabtu', 7 => 'Minggu'
+            ];
+
+            while ($curDay <= $totalDays) {
+                // Day of week: 1 (Senin) to 7 (Minggu)
+                $dayOfWeek = (int) date('N', strtotime(sprintf('%04d-%02d-%02d', $tahun, $bulan, $curDay)));
+
+                // Lewati hari libur kerja kantor (Sabtu & Minggu)
+                if ($dayOfWeek >= 6) {
+                    $curDay++;
+                    continue;
+                }
+
+                $startDay = $curDay;
+                $daysUntilFriday = 5 - $dayOfWeek;
+                $endDay = min($startDay + $daysUntilFriday, $totalDays);
+
+                $endDayOfWeek = (int) date('N', strtotime(sprintf('%04d-%02d-%02d', $tahun, $bulan, $endDay)));
+                if ($endDayOfWeek == 6) {
+                    $endDay -= 1;
+                } elseif ($endDayOfWeek == 7) {
+                    $endDay -= 2;
+                }
+
+                $startDateStr = sprintf('%04d-%02d-%02d', $tahun, $bulan, $startDay);
+                $endDateStr = sprintf('%04d-%02d-%02d', $tahun, $bulan, $endDay);
+
+                $startHari = $namaHari[$dayOfWeek] ?? 'Hari';
+                $actualEndDayOfWeek = (int) date('N', strtotime(sprintf('%04d-%02d-%02d', $tahun, $bulan, $endDay)));
+                $endHari = $namaHari[$actualEndDayOfWeek] ?? 'Hari';
+
+                $bulanStr = $namaBulan[$bulan] ?? '';
+
+                $weeks[$wIndex] = [
+                    'start_date' => $startDateStr,
+                    'end_date' => $endDateStr,
+                    'label' => "Minggu ke-{$wIndex} ({$startHari}, " . sprintf('%02d', $startDay) . " {$bulanStr} - {$endHari}, " . sprintf('%02d', $endDay) . " {$bulanStr} {$tahun})",
+                ];
+
+                $curDay = $endDay + 1;
+                $wIndex++;
             }
 
-            $startDate = sprintf('%04d-%02d-%02d', $tahun, $bulan, $startDay);
-            $endDate = sprintf('%04d-%02d-%02d', $tahun, $bulan, $endDay);
-            $bulanStr = $namaBulan[$bulan] ?? '';
-            $periodeLabel = "Minggu ke-{$minggu} ({$startDay} - {$endDay} {$bulanStr} {$tahun})";
+            $selectedWeek = $weeks[$minggu] ?? ($weeks[1] ?? null);
+            if ($selectedWeek) {
+                $startDate = $selectedWeek['start_date'];
+                $endDate = $selectedWeek['end_date'];
+                $periodeLabel = $selectedWeek['label'];
+            } else {
+                $startDate = sprintf('%04d-%02d-01', $tahun, $bulan);
+                $endDate = sprintf('%04d-%02d-%02d', $tahun, $bulan, min(7, $totalDays));
+                $bulanStr = $namaBulan[$bulan] ?? '';
+                $periodeLabel = "Minggu ke-{$minggu} ({$bulanStr} {$tahun})";
+            }
         } else {
             $tipe = 'bulanan';
             $startDate = sprintf('%04d-%02d-01', $tahun, $bulan);

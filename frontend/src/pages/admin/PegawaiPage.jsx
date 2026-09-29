@@ -141,13 +141,19 @@ export default function PegawaiPage() {
 
   const handleDelete = async (id, nama) => {
     if (!confirm(`Hapus data pegawai "${nama}"? Semua catatan terkait akan dinonaktifkan.`)) return;
+    const previous = [...pegawais];
+    const updated = pegawais.filter((p) => p.id !== id);
+    setPegawais(updated);
+    cache.set('admin_pegawais', updated);
+    cache.remove('admin_dashboard');
+    cache.remove('admin_akun_pegawai');
+
     try {
       await api.delete(`/pegawai/${id}`);
-      cache.remove('admin_pegawais');
-      cache.remove('admin_dashboard');
-      cache.remove('admin_akun_pegawai');
-      fetchPegawai(search);
+      fetchPegawai(search, true);
     } catch (err) {
+      setPegawais(previous);
+      cache.set('admin_pegawais', previous);
       alert('Gagal menghapus pegawai');
     }
   };

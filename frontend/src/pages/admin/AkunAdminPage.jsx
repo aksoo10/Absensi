@@ -216,13 +216,20 @@ export default function AkunAdminPage() {
       return;
     }
     if (!confirm(`Hapus akun administrator "${admin.name}" (${admin.email})? Tindakan ini tidak dapat dibatalkan.`)) return;
+
+    const previous = [...admins];
+    const updated = admins.filter((a) => a.id !== admin.id);
+    setAdmins(updated);
+    cache.set('admin_akun_admin', updated);
+    setSuccessMsg(`Akun administrator ${admin.email} berhasil dihapus.`);
+    setTimeout(() => setSuccessMsg(''), 4500);
+
     try {
       await api.delete(`/users/${admin.id}`);
-      cache.remove('admin_akun_admin');
-      setSuccessMsg(`Akun administrator ${admin.email} berhasil dihapus.`);
-      fetchAdmins();
-      setTimeout(() => setSuccessMsg(''), 4500);
+      fetchAdmins('', true);
     } catch (err) {
+      setAdmins(previous);
+      cache.set('admin_akun_admin', previous);
       alert(err.response?.data?.message || 'Gagal menghapus akun administrator');
     }
   };

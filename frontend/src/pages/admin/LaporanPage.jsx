@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { FileBarChart, Printer, Calendar, Users, Clock, CheckCircle, RefreshCw } from 'lucide-react';
 import api from '../../lib/api';
 import cache from '../../lib/cache';
@@ -13,15 +13,56 @@ export default function LaporanPage() {
   ];
 
   const getWeeksInMonth = (m, y) => {
-    const lastDay = new Date(y, m, 0).getDate();
+    const totalDays = new Date(y, m, 0).getDate();
+    const dayNames = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
     const monthName = bulanNames[m - 1];
-    return [
-      { id: 1, label: `Minggu 1 (01 - 07 ${monthName})` },
-      { id: 2, label: `Minggu 2 (08 - 14 ${monthName})` },
-      { id: 3, label: `Minggu 3 (15 - 21 ${monthName})` },
-      { id: 4, label: `Minggu 4 (22 - 28 ${monthName})` },
-      { id: 5, label: `Minggu 5 (29 - ${lastDay} ${monthName})` },
-    ];
+    const weeks = [];
+    let curDay = 1;
+    let weekIndex = 1;
+
+    while (curDay <= totalDays) {
+      const d = new Date(y, m - 1, curDay);
+      const dayOfWeek = d.getDay(); // 0: Minggu, 1: Senin, ..., 5: Jumat, 6: Sabtu
+
+      // Lewati hari libur kerja kantor (Sabtu & Minggu)
+      if (dayOfWeek === 0 || dayOfWeek === 6) {
+        curDay++;
+        continue;
+      }
+
+      // Hari kerja awal (Senin s/d Jumat)
+      const startDay = curDay;
+      const startHari = dayNames[dayOfWeek];
+
+      // Batas akhir hari kerja dalam minggu berjalan adalah Jumat (day 5) atau akhir bulan
+      const daysUntilFriday = 5 - dayOfWeek;
+      let endDay = Math.min(startDay + daysUntilFriday, totalDays);
+
+      // Jika akhir bulan jatuh di hari Sabtu atau Minggu, mundurkan ke hari Jumat
+      const endObj = new Date(y, m - 1, endDay);
+      if (endObj.getDay() === 6) {
+        endDay -= 1;
+      } else if (endObj.getDay() === 0) {
+        endDay -= 2;
+      }
+
+      const endHari = dayNames[new Date(y, m - 1, endDay).getDay()];
+      const pad = (n) => String(n).padStart(2, '0');
+
+      weeks.push({
+        id: weekIndex,
+        startDay,
+        endDay,
+        startHari,
+        endHari,
+        label: `Minggu ${weekIndex} (${startHari}, ${pad(startDay)} ${monthName} - ${endHari}, ${pad(endDay)} ${monthName})`
+      });
+
+      curDay = endDay + 1;
+      weekIndex++;
+    }
+
+    return weeks;
   };
 
   const getCachedLaporan = (t, m, y, w = 1) => {
@@ -42,14 +83,29 @@ export default function LaporanPage() {
   const [minggu, setMinggu] = useState(1);
   const [periodeLabel, setPeriodeLabel] = useState(`Bulan ${bulanNames[currentMonth - 1]} ${currentYear}`);
 
+  const currentWeeks = useMemo(() => getWeeksInMonth(bulan, tahun), [bulan, tahun]);
+
+  useEffect(() => {
+    if (minggu > currentWeeks.length) {
+      setMinggu(1);
+    }
+  }, [currentWeeks, minggu]);
+
   const initialCache = getCachedLaporan('bulanan', currentMonth, currentYear);
   const [laporan, setLaporan] = useState(() => initialCache?.laporan || []);
   const [loading, setLoading] = useState(() => initialCache === null);
   const [isSyncing, setIsSyncing] = useState(false);
 
-  const activeLabel = periodeLabel || (tipe === 'mingguan'
-    ? `Minggu ke-${minggu} (${bulanNames[bulan - 1]} ${tahun})`
-    : `Bulan ${bulanNames[bulan - 1]} ${tahun}`);
+  const activeLabel = useMemo(() => {
+    if (tipe === 'mingguan') {
+      const selectedW = currentWeeks.find((w) => w.id === Number(minggu)) || currentWeeks[0];
+      if (selectedW) {
+        return `Minggu ke-${selectedW.id} (${selectedW.startHari}, ${String(selectedW.startDay).padStart(2, '0')} ${bulanNames[bulan - 1]} - ${selectedW.endHari}, ${String(selectedW.endDay).padStart(2, '0')} ${bulanNames[bulan - 1]} ${tahun})`;
+      }
+      return periodeLabel || `Minggu ke-${minggu} (${bulanNames[bulan - 1]} ${tahun})`;
+    }
+    return `Bulan ${bulanNames[bulan - 1]} ${tahun}`;
+  }, [tipe, minggu, bulan, tahun, currentWeeks, periodeLabel]);
 
   const fetchLaporan = (force = false, currentTipe = tipe, currentBulan = bulan, currentTahun = tahun, currentMinggu = minggu) => {
     const key = `admin_laporan_${currentTipe}_${currentBulan}_${currentTahun}${currentTipe === 'mingguan' ? `_${currentMinggu}` : ''}`;
@@ -233,7 +289,7 @@ export default function LaporanPage() {
                     onChange={(e) => setMinggu(Number(e.target.value))}
                     style={{ fontWeight: '600', color: 'var(--text)' }}
                   >
-                    {getWeeksInMonth(bulan, tahun).map((w) => (
+                    {currentWeeks.map((w) => (
                       <option key={w.id} value={w.id}>{w.label}</option>
                     ))}
                   </select>
