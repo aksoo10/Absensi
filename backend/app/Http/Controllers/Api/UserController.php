@@ -27,6 +27,7 @@ class UserController extends Controller
                       $pq->where('jabatan', 'like', "%{$search}%")
                         ->orWhere('nip', 'like', "%{$search}%")
                         ->orWhere('nik', 'like', "%{$search}%")
+                        ->orWhere('no_telepon', 'like', "%{$search}%")
                         ->orWhere('departemen', 'like', "%{$search}%");
                   });
             });
@@ -46,6 +47,8 @@ class UserController extends Controller
             'jabatan' => 'nullable|string|max:255',
             'nip' => 'nullable|string|max:50',
             'nik' => 'nullable|string|max:20',
+            'no_telepon' => 'nullable|string|max:30',
+            'no_hp' => 'nullable|string|max:30',
         ]);
 
         $role = $validated['role'] ?? 'pegawai';
@@ -76,6 +79,8 @@ class UserController extends Controller
             Pegawai::where('nik', $nik)->where('user_id', '!=', $user->id)->update(['nik' => null]);
         }
 
+        $phone = $validated['no_telepon'] ?? ($validated['no_hp'] ?? null);
+
         if ($role === 'pegawai') {
             if ($user->pegawai) {
                 $user->pegawai->update([
@@ -83,6 +88,7 @@ class UserController extends Controller
                     'nip' => $nip,
                     'nik' => $nik,
                     'jabatan' => !empty($validated['jabatan']) ? $validated['jabatan'] : 'Staf Perangkat Desa',
+                    'no_telepon' => $phone ?: $user->pegawai->no_telepon,
                     'status' => 'aktif',
                 ]);
             } else {
@@ -93,6 +99,7 @@ class UserController extends Controller
                     'nik' => $nik,
                     'jabatan' => !empty($validated['jabatan']) ? $validated['jabatan'] : 'Staf Perangkat Desa',
                     'departemen' => 'Pemerintahan Desa',
+                    'no_telepon' => $phone,
                     'status' => 'aktif',
                     'tanggal_bergabung' => now()->toDateString(),
                 ]);
@@ -115,6 +122,8 @@ class UserController extends Controller
             'jabatan' => 'nullable|string|max:255',
             'nip' => 'nullable|string|max:50',
             'nik' => 'nullable|string|max:20',
+            'no_telepon' => 'nullable|string|max:30',
+            'no_hp' => 'nullable|string|max:30',
         ]);
 
         $userData = [];
@@ -144,6 +153,9 @@ class UserController extends Controller
             if (isset($validated['jabatan'])) $pegawaiData['jabatan'] = $validated['jabatan'];
             if (array_key_exists('nip', $validated)) $pegawaiData['nip'] = !empty($validated['nip']) ? $validated['nip'] : null;
             if (array_key_exists('nik', $validated)) $pegawaiData['nik'] = !empty($validated['nik']) ? $validated['nik'] : null;
+            if (array_key_exists('no_telepon', $validated) || array_key_exists('no_hp', $validated)) {
+                $pegawaiData['no_telepon'] = $validated['no_telepon'] ?? ($validated['no_hp'] ?? null);
+            }
             if (!empty($pegawaiData)) {
                 $user->pegawai->update($pegawaiData);
             }
@@ -154,6 +166,7 @@ class UserController extends Controller
                 'nip' => !empty($validated['nip']) ? $validated['nip'] : null,
                 'nik' => !empty($validated['nik']) ? $validated['nik'] : null,
                 'jabatan' => $validated['jabatan'] ?? 'Staf Perangkat Desa',
+                'no_telepon' => $validated['no_telepon'] ?? ($validated['no_hp'] ?? null),
                 'status' => 'aktif',
                 'tanggal_bergabung' => now()->toDateString(),
             ]);

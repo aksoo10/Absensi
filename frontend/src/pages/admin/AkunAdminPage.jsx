@@ -607,7 +607,11 @@ export default function AkunAdminPage() {
               </button>
             </div>
 
-            <form onSubmit={handleSubmitAccount} className="modal-body">
+            <form onSubmit={handleSubmitAccount} className="modal-body" autoComplete="off">
+              {/* Anti-autofill dummy inputs */}
+              <input type="text" name="fake_username_remembered" style={{ display: 'none' }} tabIndex={-1} autoComplete="off" />
+              <input type="password" name="fake_password_remembered" style={{ display: 'none' }} tabIndex={-1} autoComplete="new-password" />
+
               {error && (
                 <div className="alert alert-error" style={{ marginBottom: '14px' }}>
                   <AlertCircle size={16} style={{ flexShrink: 0 }} />
@@ -632,8 +636,10 @@ export default function AkunAdminPage() {
                 <label className="form-label">Alamat Email Login *</label>
                 <input
                   type="email"
+                  name="new_akun_admin_email"
+                  autoComplete="off"
                   className="form-input"
-                  placeholder="admin@absensi.desa"
+                  placeholder="Contoh: admin@absensi.desa"
                   value={accountForm.email}
                   onChange={(e) => setAccountForm({ ...accountForm, email: e.target.value })}
                   required
@@ -647,6 +653,8 @@ export default function AkunAdminPage() {
                 </label>
                 <input
                   type="password"
+                  name="new_akun_admin_password"
+                  autoComplete="new-password"
                   className="form-input"
                   placeholder={selectedAdmin ? 'Biarkan kosong jika tidak diubah' : 'Minimal 6 karakter'}
                   value={accountForm.password}

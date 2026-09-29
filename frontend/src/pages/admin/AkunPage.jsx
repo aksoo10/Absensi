@@ -28,6 +28,7 @@ export default function AkunPage() {
     jabatan: '',
     nip: '',
     nik: '',
+    no_telepon: '',
     password: ''
   });
 
@@ -99,8 +100,9 @@ export default function AkunPage() {
       const jabatan = (u.pegawai?.jabatan || '').toLowerCase();
       const nip = (u.pegawai?.nip || '').toLowerCase();
       const nik = (u.pegawai?.nik || '').toLowerCase();
+      const phone = (u.pegawai?.no_telepon || '').toLowerCase();
       const dept = (u.pegawai?.departemen || '').toLowerCase();
-      return name.includes(q) || email.includes(q) || jabatan.includes(q) || nip.includes(q) || nik.includes(q) || dept.includes(q);
+      return name.includes(q) || email.includes(q) || jabatan.includes(q) || nip.includes(q) || nik.includes(q) || phone.includes(q) || dept.includes(q);
     });
   }, [users, search]);
 
@@ -125,6 +127,7 @@ export default function AkunPage() {
       jabatan: '',
       nip: '',
       nik: '',
+      no_telepon: '',
       password: ''
     });
     setError('');
@@ -141,6 +144,7 @@ export default function AkunPage() {
       jabatan: u.pegawai?.jabatan || '',
       nip: u.pegawai?.nip || '',
       nik: u.pegawai?.nik || '',
+      no_telepon: u.pegawai?.no_telepon || '',
       password: ''
     });
     setError('');
@@ -419,7 +423,8 @@ export default function AkunPage() {
                           <div style={{ fontSize: '11.5px', color: 'var(--text-muted)', display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '2px' }}>
                             {u.pegawai?.nip && <span>NIP: {u.pegawai.nip}</span>}
                             {u.pegawai?.nik && <span>NIK: {u.pegawai.nik}</span>}
-                            {!u.pegawai?.nip && !u.pegawai?.nik && <span style={{ opacity: 0.6 }}>Belum ada NIP/NIK</span>}
+                            {u.pegawai?.no_telepon && <span>HP: {u.pegawai.no_telepon}</span>}
+                            {!u.pegawai?.nip && !u.pegawai?.nik && !u.pegawai?.no_telepon && <span style={{ opacity: 0.6 }}>Belum ada NIP/NIK/HP</span>}
                           </div>
                         </div>
                       </div>
@@ -641,7 +646,11 @@ export default function AkunPage() {
               </button>
             </div>
 
-            <form onSubmit={handleSubmitAccount} className="modal-body">
+            <form onSubmit={handleSubmitAccount} className="modal-body" autoComplete="off">
+              {/* Anti-autofill dummy inputs */}
+              <input type="text" name="fake_username_remembered" style={{ display: 'none' }} tabIndex={-1} autoComplete="off" />
+              <input type="password" name="fake_password_remembered" style={{ display: 'none' }} tabIndex={-1} autoComplete="new-password" />
+
               {error && (
                 <div className="alert alert-error" style={{ marginBottom: '14px' }}>
                   <AlertCircle size={16} style={{ flexShrink: 0 }} />
@@ -666,8 +675,10 @@ export default function AkunPage() {
                 <label className="form-label">Alamat Email Login *</label>
                 <input
                   type="email"
+                  name="new_akun_pegawai_email"
+                  autoComplete="off"
                   className="form-input"
-                  placeholder="nama@absensi.desa"
+                  placeholder="Contoh: nama@absensi.desa"
                   value={accountForm.email}
                   onChange={(e) => setAccountForm({ ...accountForm, email: e.target.value })}
                   required
@@ -708,6 +719,17 @@ export default function AkunPage() {
                 />
               </div>
 
+              {/* Nomor WhatsApp / HP */}
+              <div className="form-group">
+                <label className="form-label">Nomor WhatsApp / HP (Opsional)</label>
+                <input
+                  className="form-input"
+                  placeholder="Contoh: 0812xxxxxxxx"
+                  value={accountForm.no_telepon}
+                  onChange={(e) => setAccountForm({ ...accountForm, no_telepon: e.target.value })}
+                />
+              </div>
+
               {/* Password */}
               <div className="form-group">
                 <label className="form-label">
@@ -715,6 +737,8 @@ export default function AkunPage() {
                 </label>
                 <input
                   type="password"
+                  name="new_akun_pegawai_password"
+                  autoComplete="new-password"
                   className="form-input"
                   placeholder={selectedUser ? 'Biarkan kosong jika tidak diubah' : 'Minimal 6 karakter'}
                   value={accountForm.password}

@@ -15,7 +15,7 @@ export default function PegawaiPage() {
   const [editData, setEditData] = useState(null);
   const [form, setForm] = useState({
     nama: '', email: '', password: '', jabatan: '', nip: '', nik: '',
-    departemen: 'Pemerintahan Desa', jenis_kelamin: '', no_telepon: ''
+    departemen: '', jenis_kelamin: '', no_telepon: ''
   });
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
@@ -92,7 +92,7 @@ export default function PegawaiPage() {
     setEditData(null);
     setForm({
       nama: '', email: '', password: '', jabatan: '', nip: '', nik: '',
-      departemen: 'Pemerintahan Desa', jenis_kelamin: 'L', no_telepon: ''
+      departemen: '', jenis_kelamin: '', no_telepon: ''
     });
     setError('');
     setShowModal(true);
@@ -106,7 +106,7 @@ export default function PegawaiPage() {
       jabatan: p.jabatan,
       nip: p.nip || '',
       nik: p.nik || '',
-      departemen: p.departemen || 'Pemerintahan Desa',
+      departemen: p.departemen || '',
       jenis_kelamin: p.jenis_kelamin || '',
       no_telepon: p.no_telepon || '',
       password: ''
@@ -336,7 +336,11 @@ export default function PegawaiPage() {
               <h3>{editData ? 'Edit Data Pegawai' : 'Tambah Pegawai Baru'}</h3>
               <button className="modal-close" onClick={() => setShowModal(false)}>×</button>
             </div>
-            <form onSubmit={handleSubmit} className="modal-body">
+            <form onSubmit={handleSubmit} className="modal-body" autoComplete="off">
+              {/* Blokir autofill otomatis kredensial akun dari browser */}
+              <input type="text" name="fake_username_remembered" style={{ display: 'none' }} tabIndex={-1} autoComplete="off" />
+              <input type="password" name="fake_password_remembered" style={{ display: 'none' }} tabIndex={-1} autoComplete="new-password" />
+
               {error && (
                 <div className="alert alert-error">
                   <span>{error}</span>
@@ -362,7 +366,7 @@ export default function PegawaiPage() {
                   <label className="form-label">NIP (Nomor Induk Pegawai)</label>
                   <input
                     className="form-input"
-                    placeholder="19850101001"
+                    placeholder="Contoh: 19850101001"
                     value={form.nip}
                     onChange={(e) => setForm({ ...form, nip: e.target.value })}
                   />
@@ -371,7 +375,7 @@ export default function PegawaiPage() {
                   <label className="form-label">NIK (16 Digit KTP)</label>
                   <input
                     className="form-input"
-                    placeholder="16 Digit NIK"
+                    placeholder="Contoh: 16 Digit NIK"
                     maxLength={20}
                     value={form.nik}
                     onChange={(e) => setForm({ ...form, nik: e.target.value })}
@@ -393,7 +397,7 @@ export default function PegawaiPage() {
                   <label className="form-label">Nomor WhatsApp / HP</label>
                   <input
                     className="form-input"
-                    placeholder="0812xxxxxxxx"
+                    placeholder="Contoh: 0812xxxxxxxx"
                     value={form.no_telepon}
                     onChange={(e) => setForm({ ...form, no_telepon: e.target.value })}
                   />
@@ -419,7 +423,7 @@ export default function PegawaiPage() {
                   <label className="form-label">Bagian / Departemen</label>
                   <input
                     className="form-input"
-                    placeholder="Pemerintahan Desa"
+                    placeholder="Contoh: Pemerintahan Desa"
                     value={form.departemen}
                     onChange={(e) => setForm({ ...form, departemen: e.target.value })}
                   />
@@ -430,7 +434,9 @@ export default function PegawaiPage() {
                   <input
                     className="form-input"
                     type="email"
-                    placeholder="nama@absensi.desa"
+                    name="pegawai_login_email"
+                    autoComplete="off"
+                    placeholder="Contoh: nama@absensi.desa"
                     value={form.email}
                     onChange={(e) => setForm({ ...form, email: e.target.value })}
                     required
@@ -443,6 +449,8 @@ export default function PegawaiPage() {
                   <input
                     className="form-input"
                     type="password"
+                    name="pegawai_initial_password"
+                    autoComplete="new-password"
                     placeholder={editData ? 'Kosongkan jika tidak ingin diubah' : 'Minimal 6 karakter'}
                     value={form.password}
                     onChange={(e) => setForm({ ...form, password: e.target.value })}
