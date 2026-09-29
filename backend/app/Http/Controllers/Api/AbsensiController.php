@@ -42,6 +42,32 @@ class AbsensiController extends Controller
     }
 
     /**
+     * Ambil jadwal default secara aman dan terhindar dari serialisasi bermasalah
+     */
+    private function getDefaultJadwal()
+    {
+        $cached = Cache::get('jadwal_default');
+        if (is_array($cached) && !empty($cached['jam_masuk'])) {
+            return $cached;
+        }
+
+        $jadwal = JadwalKerja::where('is_default', true)->first();
+        if ($jadwal) {
+            $data = $jadwal->toArray();
+            Cache::put('jadwal_default', $data, 3600);
+            return $data;
+        }
+
+        return [
+            'nama' => 'Jadwal Reguler',
+            'jam_masuk' => '08:00:00',
+            'jam_pulang' => '16:00:00',
+            'toleransi_menit' => 15,
+            'hari_kerja' => ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat'],
+        ];
+    }
+
+    /**
      * Absen masuk
      */
     public function absenMasuk(Request $request)
@@ -53,7 +79,9 @@ class AbsensiController extends Controller
             return response()->json(['message' => 'Data pegawai tidak ditemukan'], 404);
         }
 
-        $today = today();
+        $sekarang = Carbon::now('Asia/Jakarta');
+        $today = $sekarang->toDateString();
+
         $existing = Absensi::where('pegawai_id', $pegawai->id)
                            ->where('tanggal', $today)
                            ->first();
@@ -62,19 +90,33 @@ class AbsensiController extends Controller
             return response()->json(['message' => 'Anda sudah absen masuk hari ini'], 422);
         }
 
-        // Tentukan status berdasarkan jadwal
-        $jadwal = Cache::remember('jadwal_default', 3600, fn() => JadwalKerja::where('is_default', true)->first());
-        $sekarang = Carbon::now();
+        // Tentukan status keterlambatan berdasarkan jadwal kerja
+        $jadwal = $this->getDefaultJadwal();
         $statusMasuk = 'tepat_waktu';
         $menitTerlambat = 0;
 
-        if ($jadwal) {
-            $jamMasukJadwal = Carbon::parse($today->toDateString() . ' ' . $jadwal->jam_masuk);
-            $batasTerlambat = $jamMasukJadwal->copy()->addMinutes($jadwal->toleransi_menit);
+        if ($jadwal && !empty($jadwal['jam_masuk'])) {
+            $jamMasukJadwal = Carbon::parse($today . ' ' . $jadwal['jam_masuk'], 'Asia/Jakarta');
+            $toleransiMenit = (int) ($jadwal['toleransi_menit'] ?? 0);
+            $batasTerlambat = $jamMasukJadwal->copy()->addMinutes($toleransiMenit);
 
+            // 1. Tidak bisa absen masuk sebelum jam masuk kerja (08:00 WIB)
+            if ($sekarang->lt($jamMasukJadwal)) {
+                $formatJamMasuk = substr($jadwal['jam_masuk'], 0, 5);
+                return response()->json([
+                    'message' => "Presensi masuk belum dibuka. Anda hanya dapat melakukan presensi masuk mulai pukul {$formatJamMasuk} WIB.",
+                    'jam_masuk_jadwal' => $formatJamMasuk,
+                ], 422);
+            }
+
+            // 2. Tidak boleh lewat dari batas toleransi (08:15 WIB)
             if ($sekarang->gt($batasTerlambat)) {
-                $statusMasuk = 'terlambat';
-                $menitTerlambat = $sekarang->diffInMinutes($jamMasukJadwal);
+                $formatBatas = $batasTerlambat->format('H:i');
+                return response()->json([
+                    'message' => "Waktu presensi masuk telah berakhir. Batas maksimal toleransi kehadiran adalah pukul {$formatBatas} WIB. Anda tidak dapat melakukan absen masuk.",
+                    'batas_toleransi' => $formatBatas,
+                    'lewat_toleransi' => true,
+                ], 422);
             }
         }
 
@@ -109,20 +151,38 @@ class AbsensiController extends Controller
             return response()->json(['message' => 'Data pegawai tidak ditemukan'], 404);
         }
 
+        $sekarang = Carbon::now('Asia/Jakarta');
+        $today = $sekarang->toDateString();
+
         $absensi = Absensi::where('pegawai_id', $pegawai->id)
-                         ->where('tanggal', today())
+                         ->where('tanggal', $today)
                          ->first();
 
         if (!$absensi || !$absensi->jam_masuk) {
-            return response()->json(['message' => 'Anda belum absen masuk hari ini'], 422);
+            return response()->json(['message' => 'Anda belum melakukan absen masuk hari ini'], 422);
         }
 
         if ($absensi->jam_pulang) {
-            return response()->json(['message' => 'Anda sudah absen pulang hari ini'], 422);
+            return response()->json(['message' => 'Anda sudah melakukan absen pulang hari ini'], 422);
+        }
+
+        $jadwal = $this->getDefaultJadwal();
+
+        // Validasi mutlak: Presensi pulang hanya bisa dilakukan pada atau setelah jam pulang kerja
+        if ($jadwal && !empty($jadwal['jam_pulang'])) {
+            $jamPulangJadwal = Carbon::parse($today . ' ' . $jadwal['jam_pulang'], 'Asia/Jakarta');
+            
+            if ($sekarang->lt($jamPulangJadwal)) {
+                $formatJamPulang = substr($jadwal['jam_pulang'], 0, 5);
+                return response()->json([
+                    'message' => "Presensi pulang belum dibuka. Anda hanya dapat melakukan presensi pulang mulai pukul {$formatJamPulang} WIB.",
+                    'jam_pulang_jadwal' => $formatJamPulang,
+                ], 422);
+            }
         }
 
         $absensi->update([
-            'jam_pulang' => now()->format('H:i:s'),
+            'jam_pulang' => $sekarang->format('H:i:s'),
             'lokasi_pulang' => $request->lokasi,
         ]);
 
@@ -144,17 +204,20 @@ class AbsensiController extends Controller
             return response()->json(['absensi' => null, 'jadwal' => null]);
         }
 
+        $sekarang = Carbon::now('Asia/Jakarta');
+        $today = $sekarang->toDateString();
+
         $absensi = Absensi::where('pegawai_id', $pegawai->id)
-                         ->where('tanggal', today())
+                         ->where('tanggal', $today)
                          ->first();
 
-        $jadwal = Cache::remember('jadwal_default', 3600, fn() => JadwalKerja::where('is_default', true)->first());
+        $jadwal = $this->getDefaultJadwal();
 
         return response()->json([
             'absensi' => $absensi,
             'jadwal' => $jadwal,
-            'tanggal' => today()->toDateString(),
-            'hari' => now()->locale('id')->isoFormat('dddd'),
+            'tanggal' => $today,
+            'hari' => $sekarang->locale('id')->isoFormat('dddd'),
         ]);
     }
 }

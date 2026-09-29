@@ -66,6 +66,11 @@ export default function AdminLayout() {
           if (boot.jadwals) cache.set('admin_jadwals', boot.jadwals);
           if (boot.pengajuans) cache.set('admin_pengajuans', boot.pengajuans);
           if (boot.notifikasi) cache.set('notifikasi', boot.notifikasi);
+          if (boot.laporan && Array.isArray(boot.laporan)) {
+            const m = new Date().getMonth() + 1;
+            const y = new Date().getFullYear();
+            cache.set(`admin_laporan_${m}_${y}`, boot.laporan);
+          }
         })
         .catch(() => {});
     }

@@ -1,38 +1,50 @@
 import { useEffect, useState } from 'react';
-import { FileBarChart, Printer, Calendar, Users, Clock, CheckCircle } from 'lucide-react';
+import { FileBarChart, Printer, Calendar, Users, Clock, CheckCircle, RefreshCw } from 'lucide-react';
 import api from '../../lib/api';
 import cache from '../../lib/cache';
 
 export default function LaporanPage() {
   const currentMonth = new Date().getMonth() + 1;
   const currentYear = new Date().getFullYear();
-  const initialCacheKey = `admin_laporan_${currentMonth}_${currentYear}`;
+
+  const getCachedLaporan = (m, y) => {
+    const val = cache.get(`admin_laporan_${m}_${y}`);
+    return Array.isArray(val) ? val : null;
+  };
 
   const [bulan, setBulan] = useState(currentMonth);
   const [tahun, setTahun] = useState(currentYear);
-  const [laporan, setLaporan] = useState(() => cache.get(initialCacheKey) || []);
-  const [loading, setLoading] = useState(() => cache.get(initialCacheKey) === null);
+  const [laporan, setLaporan] = useState(() => getCachedLaporan(currentMonth, currentYear) || []);
+  const [loading, setLoading] = useState(() => getCachedLaporan(currentMonth, currentYear) === null);
+  const [isSyncing, setIsSyncing] = useState(false);
 
-  const fetchLaporan = () => {
+  const fetchLaporan = (force = false) => {
     const key = `admin_laporan_${bulan}_${tahun}`;
-    const cached = cache.get(key);
-    if (cached !== null) {
+    const cached = getCachedLaporan(bulan, tahun);
+
+    if (cached !== null && !force) {
       setLaporan(cached);
       setLoading(false);
+      setIsSyncing(true);
     } else {
       setLoading(true);
     }
 
-    cache.fetchDedup(`admin_laporan_${bulan}_${tahun}`, () =>
+    cache.fetchDedup(key, () =>
       api.get('/laporan/absensi', { params: { bulan, tahun } })
     )
       .then(({ data }) => {
-        const list = data.laporan || [];
+        const list = Array.isArray(data?.laporan) ? data.laporan : [];
         setLaporan(list);
         cache.set(key, list);
       })
-      .catch(console.error)
-      .finally(() => setLoading(false));
+      .catch((err) => {
+        console.error('Gagal mengambil laporan absensi:', err);
+      })
+      .finally(() => {
+        setLoading(false);
+        setIsSyncing(false);
+      });
   };
 
   useEffect(() => {
@@ -48,13 +60,15 @@ export default function LaporanPage() {
     window.print();
   };
 
-  const totalHadirAll = laporan.reduce((sum, item) => sum + (Number(item.hadir) || 0), 0);
-  const totalTerlambatAll = laporan.reduce((sum, item) => sum + (Number(item.terlambat) || 0), 0);
-  const totalTepatWaktuAll = laporan.reduce((sum, item) => sum + (Number(item.tepat_waktu) || 0), 0);
-  const totalIzinAll = laporan.reduce((sum, item) => sum + (Number(item.izin) || 0), 0);
-  const totalSakitAll = laporan.reduce((sum, item) => sum + (Number(item.sakit) || 0), 0);
-  const totalDinasAll = laporan.reduce((sum, item) => sum + (Number(item.dinas_luar) || 0), 0);
-  const totalJamAll = laporan.reduce((sum, item) => sum + (Number(item.total_jam_kerja) || 0), 0);
+  const laporanList = Array.isArray(laporan) ? laporan : [];
+
+  const totalHadirAll = laporanList.reduce((sum, item) => sum + (Number(item.hadir) || 0), 0);
+  const totalTerlambatAll = laporanList.reduce((sum, item) => sum + (Number(item.terlambat) || 0), 0);
+  const totalTepatWaktuAll = laporanList.reduce((sum, item) => sum + (Number(item.tepat_waktu) || 0), 0);
+  const totalIzinAll = laporanList.reduce((sum, item) => sum + (Number(item.izin) || 0), 0);
+  const totalSakitAll = laporanList.reduce((sum, item) => sum + (Number(item.sakit) || 0), 0);
+  const totalDinasAll = laporanList.reduce((sum, item) => sum + (Number(item.dinas_luar) || 0), 0);
+  const totalJamAll = laporanList.reduce((sum, item) => sum + (Number(item.total_jam_kerja) || 0), 0);
   const totalIzinSakitAll = totalIzinAll + totalSakitAll + totalDinasAll;
 
   // Tanggal cetak formal
@@ -65,18 +79,18 @@ export default function LaporanPage() {
   });
 
   // Data penandatangan (Kepala Desa & Sekretaris Desa)
-  const kades = laporan.find(p => p.jabatan?.toLowerCase().includes('kepala desa')) || {
+  const kades = laporanList.find(p => p.jabatan?.toLowerCase().includes('kepala desa')) || {
     nama: 'Herman Sawiran',
     nip: '-'
   };
 
-  const sekdes = laporan.find(p => p.jabatan?.toLowerCase().includes('sekretaris')) || {
+  const sekdes = laporanList.find(p => p.jabatan?.toLowerCase().includes('sekretaris')) || {
     nama: 'Budi Santoso',
     nip: '19850101001'
   };
 
   return (
-    <div className="page">
+    <div className="page" style={{ maxWidth: '100%' }}>
       {/* ─── 1. Tampilan Layar: Header Halaman (Disembunyikan Saat Cetak) ─── */}
       <div className="page-header no-print">
         <div>
@@ -84,7 +98,7 @@ export default function LaporanPage() {
           <p className="page-desc">Laporan akumulasi kehadiran bulanan aparatur Pemerintah Desa Bailangu Timur</p>
         </div>
         <div style={{ display: 'flex', gap: '10px' }}>
-          <button className="btn btn-primary" onClick={handlePrint} disabled={loading || laporan.length === 0}>
+          <button className="btn btn-primary" onClick={handlePrint} disabled={loading && laporanList.length === 0}>
             <Printer size={16} /> Cetak Laporan
           </button>
         </div>
@@ -117,13 +131,18 @@ export default function LaporanPage() {
                   <option key={y} value={y}>{y}</option>
                 ))}
               </select>
-              <button className="btn btn-primary" onClick={fetchLaporan} disabled={loading}>
+              <button className="btn btn-primary" onClick={() => fetchLaporan(true)} disabled={loading}>
                 {loading ? <span className="spinner-sm" /> : 'Tampilkan Data'}
               </button>
             </div>
 
-            <div style={{ fontSize: '13px', color: 'var(--text-muted)', fontWeight: '500' }}>
-              Periode Aktif: <strong>{bulanNames[bulan - 1]} {tahun}</strong>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '13px', color: 'var(--text-muted)', fontWeight: '500' }}>
+              {isSyncing && (
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', color: 'var(--primary)', fontSize: '12px' }}>
+                  <RefreshCw size={12} className="animate-spin" /> Memperbarui...
+                </span>
+              )}
+              <span>Periode Aktif: <strong>{bulanNames[bulan - 1]} {tahun}</strong></span>
             </div>
           </div>
         </div>
@@ -134,7 +153,7 @@ export default function LaporanPage() {
         <div className="stat-card stat-blue">
           <div className="stat-icon"><Users size={24} /></div>
           <div className="stat-body">
-            <div className="stat-value">{laporan.length}</div>
+            <div className="stat-value">{laporanList.length}</div>
             <div className="stat-label">Total Pegawai Terdaftar</div>
           </div>
         </div>
@@ -171,97 +190,97 @@ export default function LaporanPage() {
         </div>
 
         <div className="table-wrapper">
-          {loading ? (
-            <div className="table-loader"><div className="spinner" /></div>
-          ) : (
-            <table className="data-table">
-              <thead>
+          <table className="data-table table-rekap">
+            <thead>
+              <tr>
+                <th style={{ width: '36px', textAlign: 'center' }}>No</th>
+                <th style={{ minWidth: '135px' }}>Nama Pegawai</th>
+                <th style={{ minWidth: '105px' }}>NIP</th>
+                <th style={{ minWidth: '110px' }}>NIK</th>
+                <th style={{ minWidth: '100px' }}>Jabatan</th>
+                <th className="text-center" style={{ minWidth: '65px' }}>Hadir</th>
+                <th className="text-center" style={{ minWidth: '50px' }}>Tepat</th>
+                <th className="text-center" style={{ minWidth: '60px' }}>Terlambat</th>
+                <th className="text-center" style={{ minWidth: '40px' }}>Izin</th>
+                <th className="text-center" style={{ minWidth: '40px' }}>Sakit</th>
+                <th className="text-center" style={{ minWidth: '45px' }}>Dinas</th>
+                <th className="text-center" style={{ minWidth: '65px' }}>Total Jam</th>
+              </tr>
+            </thead>
+            <tbody>
+              {loading && laporanList.length === 0 ? (
                 <tr>
-                  <th>No</th>
-                  <th>Nama Pegawai</th>
-                  <th>NIP</th>
-                  <th>NIK</th>
-                  <th>Jabatan</th>
-                  <th className="text-center">Total Hadir</th>
-                  <th className="text-center">Tepat Waktu</th>
-                  <th className="text-center">Terlambat</th>
-                  <th className="text-center">Izin</th>
-                  <th className="text-center">Sakit</th>
-                  <th className="text-center">Dinas Luar</th>
-                  <th className="text-center">Akumulasi Jam Kerja</th>
+                  <td colSpan={12} style={{ textAlign: 'center', padding: '30px' }}>
+                    <div className="spinner" style={{ margin: '0 auto 10px' }} />
+                    <span style={{ color: 'var(--text-muted)', fontSize: '12px' }}>Memuat data laporan presensi...</span>
+                  </td>
                 </tr>
-              </thead>
-              <tbody>
-                {loading && cache.get(`admin_laporan_${bulan}_${tahun}`) === null ? (
-                  <tr>
-                    <td colSpan={12} style={{ textAlign: 'center', padding: '40px' }}>
-                      <div className="spinner" style={{ margin: '0 auto 10px' }} />
-                      <span style={{ color: 'var(--text-muted)', fontSize: '13px' }}>Memuat data laporan presensi...</span>
+              ) : laporanList.length === 0 ? (
+                <tr>
+                  <td colSpan={12} className="empty-row" style={{ padding: '36px !important' }}>
+                    Tidak ada catatan presensi pada periode {bulanNames[bulan - 1]} {tahun}
+                  </td>
+                </tr>
+              ) : (
+                laporanList.map((l, index) => (
+                  <tr key={l.pegawai_id}>
+                    <td style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: '11.5px', padding: '7px 4px' }}>
+                      {index + 1}
                     </td>
-                  </tr>
-                ) : laporan.length === 0 ? (
-                  <tr>
-                    <td colSpan={12} className="empty-row">
-                      Tidak ada catatan presensi pada periode {bulanNames[bulan - 1]} {tahun}
+                    <td>
+                      <div className="font-semibold" style={{ color: 'var(--text)', fontSize: '12px', whiteSpace: 'nowrap' }}>{l.nama}</div>
                     </td>
-                  </tr>
-                ) : (
-                  laporan.map((l, index) => (
-                    <tr key={l.pegawai_id}>
-                      <td style={{ width: '40px', color: 'var(--text-muted)', fontSize: '13px' }}>
-                        {index + 1}
-                      </td>
-                      <td>
-                        <div className="font-semibold" style={{ color: 'var(--text)' }}>{l.nama}</div>
-                      </td>
-                      <td>
-                        {l.nip ? (
-                          <span style={{ fontFamily: 'monospace', fontWeight: '600', color: 'var(--text-secondary)' }}>
-                            {l.nip}
-                          </span>
-                        ) : (
-                          <span className="text-muted text-xs">-</span>
-                        )}
-                      </td>
-                      <td>
-                        {l.nik ? (
-                          <span style={{ fontFamily: 'monospace', fontWeight: '600', color: 'var(--text-secondary)' }}>
-                            {l.nik}
-                          </span>
-                        ) : (
-                          <span className="text-muted text-xs">-</span>
-                        )}
-                      </td>
-                      <td>
-                        <div className="font-medium" style={{ color: 'var(--text)' }}>{l.jabatan}</div>
-                      </td>
-                      <td className="text-center">
-                        <span className="badge badge-success" style={{ fontWeight: '700' }}>
-                          {l.hadir} Hari
+                    <td>
+                      {l.nip ? (
+                        <span style={{ fontFamily: 'monospace', fontWeight: '600', color: 'var(--text-secondary)', fontSize: '11px', whiteSpace: 'nowrap' }}>
+                          {l.nip}
                         </span>
-                      </td>
-                      <td className="text-center" style={{ fontWeight: '600' }}>
-                        {l.tepat_waktu}
-                      </td>
-                      <td className="text-center">
-                        <span className={`badge ${l.terlambat > 0 ? 'badge-warning' : ''}`}>
+                      ) : (
+                        <span className="text-muted text-xs">-</span>
+                      )}
+                    </td>
+                    <td>
+                      {l.nik ? (
+                        <span style={{ fontFamily: 'monospace', fontWeight: '600', color: 'var(--text-secondary)', fontSize: '11px', whiteSpace: 'nowrap' }}>
+                          {l.nik}
+                        </span>
+                      ) : (
+                        <span className="text-muted text-xs">-</span>
+                      )}
+                    </td>
+                    <td>
+                      <div style={{ color: 'var(--text)', fontSize: '11.5px', whiteSpace: 'nowrap' }}>{l.jabatan}</div>
+                    </td>
+                    <td className="text-center">
+                      <span className="badge badge-success" style={{ fontWeight: '700', padding: '2px 6px', fontSize: '11px' }}>
+                        {l.hadir} Hari
+                      </span>
+                    </td>
+                    <td className="text-center" style={{ fontWeight: '600', fontSize: '11.5px' }}>
+                      {l.tepat_waktu}
+                    </td>
+                    <td className="text-center">
+                      {l.terlambat > 0 ? (
+                        <span className="badge badge-warning" style={{ padding: '2px 6px', fontSize: '11px' }}>
                           {l.terlambat}
                         </span>
-                      </td>
-                      <td className="text-center">{l.izin || 0}</td>
-                      <td className="text-center">{l.sakit || 0}</td>
-                      <td className="text-center">{l.dinas_luar || 0}</td>
-                      <td className="text-center">
-                        <span style={{ fontWeight: '700', color: 'var(--primary)' }}>
-                          {l.total_jam_kerja || 0}
-                        </span> <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Jam</span>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          )}
+                      ) : (
+                        <span style={{ color: 'var(--text-muted)', fontSize: '11.5px' }}>0</span>
+                      )}
+                    </td>
+                    <td className="text-center" style={{ fontSize: '11.5px' }}>{l.izin || 0}</td>
+                    <td className="text-center" style={{ fontSize: '11.5px' }}>{l.sakit || 0}</td>
+                    <td className="text-center" style={{ fontSize: '11.5px' }}>{l.dinas_luar || 0}</td>
+                    <td className="text-center">
+                      <span style={{ fontWeight: '700', color: 'var(--primary)', fontSize: '11.5px' }}>
+                        {l.total_jam_kerja || 0}
+                      </span> <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>Jam</span>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
         </div>
       </div>
 

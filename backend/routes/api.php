@@ -45,6 +45,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/{pengajuan}/download', [PengajuanController::class, 'downloadDokumen']);
         Route::get('/{pengajuan}', [PengajuanController::class, 'show']);
         Route::patch('/{pengajuan}/proses', [PengajuanController::class, 'proses']);
+        Route::delete('/{pengajuan}', [PengajuanController::class, 'destroy']);
     });
 
     // Laporan

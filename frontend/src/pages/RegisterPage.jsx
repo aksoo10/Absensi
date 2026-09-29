@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import {
@@ -20,6 +20,27 @@ export default function RegisterPage() {
   const [showConfirmPass, setShowConfirmPass] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [isReadOnly, setIsReadOnly] = useState(true);
+
+  // Mencegah browser autofill mengisi username/password lama ke form registrasi
+  useEffect(() => {
+    setName('');
+    setEmail('');
+    setJabatan('');
+    setNip('');
+    setPassword('');
+    setPasswordConfirmation('');
+    const timer = setTimeout(() => {
+      setIsReadOnly(false);
+      setName('');
+      setEmail('');
+      setJabatan('');
+      setNip('');
+      setPassword('');
+      setPasswordConfirmation('');
+    }, 300);
+    return () => clearTimeout(timer);
+  }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -129,20 +150,43 @@ export default function RegisterPage() {
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="login-form" style={{ gap: '14px' }}>
+          <form onSubmit={handleSubmit} className="login-form" style={{ gap: '14px' }} autoComplete="off">
+            {/* Hidden dummy fields to intercept and neutralize browser credential autofill */}
+            <input
+              type="text"
+              name="fake_reg_user_prevent_autofill"
+              style={{ position: 'absolute', top: '-9999px', left: '-9999px', opacity: 0, height: 0, width: 0, zIndex: -1, pointerEvents: 'none' }}
+              tabIndex={-1}
+              aria-hidden="true"
+              autoComplete="username"
+              readOnly
+            />
+            <input
+              type="password"
+              name="fake_reg_pass_prevent_autofill"
+              style={{ position: 'absolute', top: '-9999px', left: '-9999px', opacity: 0, height: 0, width: 0, zIndex: -1, pointerEvents: 'none' }}
+              tabIndex={-1}
+              aria-hidden="true"
+              autoComplete="current-password"
+              readOnly
+            />
+
             <div className="form-group">
               <label htmlFor="reg-name" className="form-label">Nama Lengkap</label>
               <div className="input-wrapper">
                 <User size={18} className="input-icon" />
                 <input
                   id="reg-name"
+                  name="register_user_fullname"
                   type="text"
                   className="form-input"
                   placeholder="Masukkan nama lengkap..."
                   value={name}
                   onChange={(e) => setName(e.target.value)}
+                  readOnly={isReadOnly}
+                  onFocus={() => setIsReadOnly(false)}
+                  autoComplete="off"
                   required
-                  autoFocus
                 />
               </div>
             </div>
@@ -153,11 +197,15 @@ export default function RegisterPage() {
                 <Mail size={18} className="input-icon" />
                 <input
                   id="reg-email"
+                  name="register_user_email"
                   type="email"
                   className="form-input"
                   placeholder="nama@absensi.desa"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
+                  readOnly={isReadOnly}
+                  onFocus={() => setIsReadOnly(false)}
+                  autoComplete="off"
                   required
                 />
               </div>
@@ -169,11 +217,15 @@ export default function RegisterPage() {
                 <Briefcase size={18} className="input-icon" />
                 <input
                   id="reg-jabatan"
+                  name="register_user_position"
                   type="text"
                   className="form-input"
                   placeholder="Contoh: Kaur Keuangan / Kasi Pemerintahan"
                   value={jabatan}
                   onChange={(e) => setJabatan(e.target.value)}
+                  readOnly={isReadOnly}
+                  onFocus={() => setIsReadOnly(false)}
+                  autoComplete="off"
                 />
               </div>
             </div>
@@ -186,11 +238,15 @@ export default function RegisterPage() {
                 <Hash size={18} className="input-icon" />
                 <input
                   id="reg-nip"
+                  name="register_user_identity"
                   type="text"
                   className="form-input"
                   placeholder="Contoh: 19920101001"
                   value={nip}
                   onChange={(e) => setNip(e.target.value)}
+                  readOnly={isReadOnly}
+                  onFocus={() => setIsReadOnly(false)}
+                  autoComplete="off"
                 />
               </div>
             </div>
@@ -201,11 +257,15 @@ export default function RegisterPage() {
                 <Lock size={18} className="input-icon" />
                 <input
                   id="reg-password"
+                  name="register_account_password"
                   type={showPass ? 'text' : 'password'}
                   className="form-input"
                   placeholder="Minimal 6 karakter..."
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
+                  readOnly={isReadOnly}
+                  onFocus={() => setIsReadOnly(false)}
+                  autoComplete="new-password"
                   required
                 />
                 <button
@@ -225,11 +285,15 @@ export default function RegisterPage() {
                 <Lock size={18} className="input-icon" />
                 <input
                   id="reg-password-confirm"
+                  name="register_account_password_confirm"
                   type={showConfirmPass ? 'text' : 'password'}
                   className="form-input"
                   placeholder="Ulangi kata sandi..."
                   value={passwordConfirmation}
                   onChange={(e) => setPasswordConfirmation(e.target.value)}
+                  readOnly={isReadOnly}
+                  onFocus={() => setIsReadOnly(false)}
+                  autoComplete="new-password"
                   required
                 />
                 <button

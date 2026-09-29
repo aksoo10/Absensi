@@ -37,6 +37,18 @@ class PengajuanController extends Controller
             $query->where('jenis', $request->jenis);
         }
 
+        if ($request->q) {
+            $search = trim($request->q);
+            $query->where(function ($q) use ($search) {
+                $q->where('alasan', 'like', "%{$search}%")
+                  ->orWhereHas('pegawai', function ($pq) use ($search) {
+                      $pq->where('nama', 'like', "%{$search}%")
+                         ->orWhere('nip', 'like', "%{$search}%")
+                         ->orWhere('jabatan', 'like', "%{$search}%");
+                  });
+            });
+        }
+
         $res = response()->json($query->latest()->paginate(15));
         $res->headers->set('X-Exec-Time', round((microtime(true) - $start) * 1000, 2) . 'ms');
         return $res;
@@ -109,6 +121,39 @@ class PengajuanController extends Controller
         return response()->json([
             'message' => 'Pengajuan berhasil ' . ($request->status === 'disetujui' ? 'disetujui' : 'ditolak'),
             'pengajuan' => $pengajuan->fresh()->load('pegawai.user', 'pemroses'),
+        ]);
+    }
+
+    /**
+     * Hapus data pengajuan (Admin dapat menghapus semua pengajuan, Pegawai hanya pengajuan miliknya yang pending)
+     */
+    public function destroy(Request $request, Pengajuan $pengajuan)
+    {
+        $user = $request->user();
+
+        // Otorisasi: Admin memiliki akses penuh; Pegawai hanya dapat menghapus pengajuan miliknya yang berstatus pending
+        if ($user->role !== 'admin') {
+            if (!$user->pegawai || $pengajuan->pegawai_id !== $user->pegawai->id) {
+                return response()->json(['message' => 'Anda tidak memiliki hak untuk menghapus pengajuan ini.'], 403);
+            }
+            if ($pengajuan->status !== 'pending') {
+                return response()->json(['message' => 'Pengajuan yang sudah diproses oleh admin tidak dapat dihapus.'], 422);
+            }
+        }
+
+        // Hapus file dokumen bukti lampiran jika ada
+        if ($pengajuan->dokumen && Storage::disk('public')->exists($pengajuan->dokumen)) {
+            try {
+                Storage::disk('public')->delete($pengajuan->dokumen);
+            } catch (\Throwable $e) {
+                // Ignore storage deletion error and continue database removal
+            }
+        }
+
+        $pengajuan->delete();
+
+        return response()->json([
+            'message' => 'Data permohonan pengajuan berhasil dihapus',
         ]);
     }
 

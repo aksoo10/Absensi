@@ -49,6 +49,12 @@ class BootstrapController extends Controller
         $notifCtrl = app(NotifikasiController::class);
         $notifikasi = $notifCtrl->index($request)->getData(true)['data'] ?? [];
 
+        // 9. Laporan rekapitulasi bulan berjalan
+        $curBulan = (int) $today->format('n');
+        $curTahun = (int) $today->format('Y');
+        $laporanReq = new Request(['bulan' => $curBulan, 'tahun' => $curTahun]);
+        $laporanData = $laporanCtrl->absensi($laporanReq)->getData(true)['laporan'] ?? [];
+
         $res = response()->json([
             'dashboard' => $dashboard,
             'absensi_today' => $absensiToday,
@@ -58,6 +64,7 @@ class BootstrapController extends Controller
             'jadwals' => $jadwals,
             'pengajuans' => $pengajuans,
             'notifikasi' => $notifikasi,
+            'laporan' => $laporanData,
         ]);
 
         $res->headers->set('X-Exec-Time', round((microtime(true) - $start) * 1000, 2) . 'ms');
@@ -82,12 +89,10 @@ class BootstrapController extends Controller
             }
         }
 
-        $today = today();
         $absensiHariIni = null;
         if ($pegawai) {
-            $absensiHariIni = Absensi::where('pegawai_id', $pegawai->id)
-                ->where('tanggal', $today)
-                ->first();
+            $absCtrl = app(AbsensiController::class);
+            $absensiHariIni = $absCtrl->hariIni($request)->getData(true);
         }
 
         $pengajuans = [];

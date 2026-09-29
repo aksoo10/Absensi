@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import {
   Clock, LogIn, LogOut, CheckCircle, AlertCircle,
-  Calendar, ShieldCheck, Info, CheckCircle2, AlertTriangle
+  Calendar, Info, CheckCircle2, AlertTriangle, Lock
 } from 'lucide-react';
 import api from '../../lib/api';
 import cache from '../../lib/cache';
@@ -35,16 +35,87 @@ export default function AbsensiPage() {
     fetchHariIni();
   }, []);
 
+  const absensi = hariIni?.absensi !== undefined ? hariIni.absensi : (hariIni?.jam_masuk !== undefined ? hariIni : null);
+  const jadwal = (hariIni?.jadwal && hariIni.jadwal.nama) ? hariIni.jadwal : {
+    nama: 'Jadwal Reguler',
+    jam_masuk: '08:00:00',
+    jam_pulang: '16:00:00',
+    toleransi_menit: 15
+  };
+
+  const formatJamMasuk = jadwal?.jam_masuk ? jadwal.jam_masuk.slice(0, 5) : '08:00';
+  const formatJamPulang = jadwal?.jam_pulang ? jadwal.jam_pulang.slice(0, 5) : '16:00';
+  const toleransiMenit = Number(jadwal?.toleransi_menit) || 15;
+
+  const getBatasMasuk = () => {
+    const rawJamMasuk = jadwal?.jam_masuk || '08:00:00';
+    const parts = rawJamMasuk.split(':');
+    const startH = parseInt(parts[0], 10);
+    const startM = parseInt(parts[1], 10);
+
+    const totalEndM = startM + toleransiMenit;
+    const endH = startH + Math.floor(totalEndM / 60);
+    const endM = totalEndM % 60;
+
+    return { startH, startM, endH, endM };
+  };
+
+  const isBeforeJamMasuk = () => {
+    const { startH, startM } = getBatasMasuk();
+    const nowH = currentTime.getHours();
+    const nowM = currentTime.getMinutes();
+    return nowH < startH || (nowH === startH && nowM < startM);
+  };
+
+  const isAfterToleransiMasuk = () => {
+    const { endH, endM } = getBatasMasuk();
+    const nowH = currentTime.getHours();
+    const nowM = currentTime.getMinutes();
+    return nowH > endH || (nowH === endH && nowM > endM);
+  };
+
+  const formatBatasToleransi = () => {
+    const { endH, endM } = getBatasMasuk();
+    return `${String(endH).padStart(2, '0')}:${String(endM).padStart(2, '0')}`;
+  };
+
+  const isBeforeJamPulang = () => {
+    if (!jadwal?.jam_pulang) return false;
+    const parts = jadwal.jam_pulang.split(':');
+    const targetH = parseInt(parts[0], 10);
+    const targetM = parseInt(parts[1], 10);
+    const nowH = currentTime.getHours();
+    const nowM = currentTime.getMinutes();
+    return nowH < targetH || (nowH === targetH && nowM < targetM);
+  };
+
   const handleAbsenMasuk = async () => {
+    if (isBeforeJamMasuk()) {
+      setMessage({
+        type: 'error',
+        text: `Presensi masuk belum dibuka. Tombol baru dapat ditekan tepat pada pukul ${formatJamMasuk} WIB.`
+      });
+      return;
+    }
+
+    if (isAfterToleransiMasuk()) {
+      setMessage({
+        type: 'error',
+        text: `Waktu presensi masuk telah berakhir. Batas maksimal kehadiran adalah pukul ${formatBatasToleransi()} WIB.`
+      });
+      return;
+    }
+
     setSubmitting('masuk');
     setMessage(null);
     try {
       const { data } = await api.post('/absensi/masuk');
       setMessage({
         type: 'success',
-        text: data.message + (data.status_masuk === 'terlambat' ? ` (Terlambat ${data.menit_terlambat} menit)` : ' — Tepat Waktu!')
+        text: data.message + ' — Presensi Tepat Waktu!'
       });
       cache.remove('dashboard_pegawai');
+      cache.remove('admin_absensi_today');
       fetchHariIni();
     } catch (err) {
       setMessage({ type: 'error', text: err.response?.data?.message || 'Gagal melakukan absen masuk' });
@@ -54,12 +125,22 @@ export default function AbsensiPage() {
   };
 
   const handleAbsenPulang = async () => {
+    // Larangan mutlak: tombol tidak bisa ditekan sebelum jam pulang
+    if (isBeforeJamPulang()) {
+      setMessage({
+        type: 'error',
+        text: `Presensi pulang belum dibuka. Tombol baru dapat ditekan tepat pada pukul ${formatJamPulang} WIB.`
+      });
+      return;
+    }
+
     setSubmitting('pulang');
     setMessage(null);
     try {
       const { data } = await api.post('/absensi/pulang');
       setMessage({ type: 'success', text: data.message });
       cache.remove('dashboard_pegawai');
+      cache.remove('admin_absensi_today');
       fetchHariIni();
     } catch (err) {
       setMessage({ type: 'error', text: err.response?.data?.message || 'Gagal melakukan absen pulang' });
@@ -67,9 +148,6 @@ export default function AbsensiPage() {
       setSubmitting(null);
     }
   };
-
-  const absensi = hariIni?.absensi;
-  const jadwal = hariIni?.jadwal;
 
   const hours = String(currentTime.getHours()).padStart(2, '0');
   const minutes = String(currentTime.getMinutes()).padStart(2, '0');
@@ -125,14 +203,12 @@ export default function AbsensiPage() {
             {dateStr}
           </div>
 
-          {jadwal && (
-            <div className="clock-jadwal">
-              <Calendar size={14} />
-              <span>Jadwal Aktif: <strong>{jadwal.nama}</strong> ({jadwal.jam_masuk} — {jadwal.jam_pulang} WIB)</span>
-              <span style={{ opacity: 0.6 }}>&bull;</span>
-              <span>Toleransi: <strong>{jadwal.toleransi_menit} Menit</strong></span>
-            </div>
-          )}
+          <div className="clock-jadwal">
+            <Calendar size={14} />
+            <span>Jadwal Aktif: <strong>{jadwal.nama}</strong> ({formatJamMasuk} — {formatJamPulang} WIB)</span>
+            <span style={{ opacity: 0.6 }}>&bull;</span>
+            <span>Toleransi: <strong>{toleransiMenit} Menit</strong> (s/d {formatBatasToleransi()} WIB)</span>
+          </div>
         </div>
       </div>
 
@@ -153,7 +229,7 @@ export default function AbsensiPage() {
       ) : (
         <div className="absensi-grid">
           {/* Absen Masuk Card */}
-          <div className={`absensi-card ${absensi?.jam_masuk ? 'done' : ''}`}>
+          <div className={`absensi-card ${absensi?.jam_masuk ? 'done' : (isBeforeJamMasuk() || isAfterToleransiMasuk()) ? 'disabled' : ''}`}>
             <div className="absensi-card-icon">
               {absensi?.jam_masuk ? <CheckCircle size={32} /> : <LogIn size={32} />}
             </div>
@@ -161,7 +237,7 @@ export default function AbsensiPage() {
             <div>
               <h3>Presensi Masuk</h3>
               <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginTop: '4px' }}>
-                {absensi?.jam_masuk ? 'Telah tercatat pada sistem' : 'Tekan tombol untuk mencatat waktu tiba'}
+                {absensi?.jam_masuk ? 'Telah tercatat pada sistem' : `Jadwal: ${formatJamMasuk} — ${formatBatasToleransi()} WIB`}
               </p>
             </div>
 
@@ -175,7 +251,7 @@ export default function AbsensiPage() {
                 )}
                 {absensi.status_masuk === 'terlambat' && (
                   <span className="badge badge-warning" style={{ padding: '6px 14px', fontSize: '13px' }}>
-                    <AlertTriangle size={14} /> Terlambat {absensi.menit_terlambat} Menit
+                    <AlertTriangle size={14} /> Terlambat {Math.abs(Math.round(absensi.menit_terlambat))} Menit
                   </span>
                 )}
               </div>
@@ -184,12 +260,29 @@ export default function AbsensiPage() {
                 <button
                   className="btn btn-primary btn-absen btn-full"
                   onClick={handleAbsenMasuk}
-                  disabled={submitting === 'masuk'}
+                  disabled={submitting === 'masuk' || isBeforeJamMasuk() || isAfterToleransiMasuk()}
+                  style={isBeforeJamMasuk() || isAfterToleransiMasuk() ? {
+                    background: '#f1f5f9',
+                    color: '#94a3b8',
+                    borderColor: '#e2e8f0',
+                    cursor: 'not-allowed',
+                    opacity: 0.85
+                  } : {}}
                 >
                   {submitting === 'masuk' ? (
                     <>
                       <span className="spinner-sm" />
                       Mencatat Kehadiran...
+                    </>
+                  ) : isBeforeJamMasuk() ? (
+                    <>
+                      <Lock size={17} />
+                      Belum Jam Masuk (Pukul {formatJamMasuk} WIB)
+                    </>
+                  ) : isAfterToleransiMasuk() ? (
+                    <>
+                      <AlertCircle size={17} />
+                      Batas Masuk Berakhir ({formatBatasToleransi()} WIB)
                     </>
                   ) : (
                     <>
@@ -198,6 +291,45 @@ export default function AbsensiPage() {
                     </>
                   )}
                 </button>
+
+                {isBeforeJamMasuk() && (
+                  <div style={{
+                    marginTop: '10px',
+                    padding: '8px 12px',
+                    background: '#fffbeb',
+                    border: '1px solid #fde68a',
+                    borderRadius: '8px',
+                    fontSize: '12px',
+                    color: '#b45309',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '6px',
+                    fontWeight: '500'
+                  }}>
+                    <Lock size={13} /> Tombol tidak bisa ditekan sebelum pukul {formatJamMasuk} WIB
+                  </div>
+                )}
+
+                {isAfterToleransiMasuk() && (
+                  <div style={{
+                    marginTop: '10px',
+                    padding: '8px 12px',
+                    background: '#fef2f2',
+                    border: '1px solid #fecaca',
+                    borderRadius: '8px',
+                    fontSize: '12px',
+                    color: '#b91c1c',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '6px',
+                    fontWeight: '500',
+                    textAlign: 'center'
+                  }}>
+                    <AlertCircle size={14} style={{ flexShrink: 0 }} /> Batas toleransi kehadiran ({formatBatasToleransi()} WIB) telah berakhir
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -211,7 +343,7 @@ export default function AbsensiPage() {
             <div>
               <h3>Presensi Pulang</h3>
               <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginTop: '4px' }}>
-                {absensi?.jam_pulang ? 'Telah tercatat pada sistem' : 'Tekan tombol saat jam kerja berakhir'}
+                {absensi?.jam_pulang ? 'Telah tercatat pada sistem' : 'Tombol aktif pada jam kerja berakhir'}
               </p>
             </div>
 
@@ -227,17 +359,29 @@ export default function AbsensiPage() {
                 <button
                   className="btn btn-secondary btn-absen btn-full"
                   onClick={handleAbsenPulang}
-                  disabled={submitting === 'pulang' || !absensi?.jam_masuk}
-                  style={absensi?.jam_masuk ? {
+                  disabled={submitting === 'pulang' || !absensi?.jam_masuk || isBeforeJamPulang()}
+                  style={!absensi?.jam_masuk || isBeforeJamPulang() ? {
+                    background: '#f1f5f9',
+                    color: '#94a3b8',
+                    borderColor: '#e2e8f0',
+                    cursor: 'not-allowed',
+                    opacity: 0.85
+                  } : {
                     background: 'var(--primary-light)',
                     color: 'var(--primary)',
-                    borderColor: 'rgba(37, 99, 235, 0.3)'
-                  } : {}}
+                    borderColor: 'rgba(37, 99, 235, 0.3)',
+                    cursor: 'pointer'
+                  }}
                 >
                   {submitting === 'pulang' ? (
                     <>
                       <span className="spinner-sm" />
                       Mencatat Kepulangan...
+                    </>
+                  ) : isBeforeJamPulang() ? (
+                    <>
+                      <Lock size={17} />
+                      Belum Jam Pulang (Pukul {formatJamPulang} WIB)
                     </>
                   ) : (
                     <>
@@ -246,6 +390,26 @@ export default function AbsensiPage() {
                     </>
                   )}
                 </button>
+
+                {absensi?.jam_masuk && isBeforeJamPulang() && (
+                  <div style={{
+                    marginTop: '10px',
+                    padding: '8px 12px',
+                    background: '#fffbeb',
+                    border: '1px solid #fde68a',
+                    borderRadius: '8px',
+                    fontSize: '12px',
+                    color: '#b45309',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '6px',
+                    fontWeight: '500'
+                  }}>
+                    <Lock size={13} /> Tombol tidak bisa ditekan sebelum pukul {formatJamPulang} WIB
+                  </div>
+                )}
+
                 {!absensi?.jam_masuk && (
                   <p className="absensi-note" style={{ marginTop: '10px' }}>
                     * Lakukan absen masuk terlebih dahulu sebelum dapat mencatat kepulangan
@@ -275,11 +439,14 @@ export default function AbsensiPage() {
           <br />
           1. Waktu pencatatan kehadiran menggunakan basis waktu server Indonesia Barat (WIB).
           <br />
-          2. Presensi tepat waktu dicatat apabila masuk sebelum toleransi jadwal kerja terlampaui.
+          2. <strong>Presensi Masuk hanya dapat ditekan mulai pukul {formatJamMasuk} WIB hingga batas toleransi ({formatBatasToleransi()} WIB)</strong>. Lewat dari batas waktu tersebut, presensi masuk tidak dapat dilakukan.
           <br />
-          3. Jika berhalangan hadir karena dinas, sakit, atau keperluan izin lainnya, silakan ajukan melalui menu <strong>Pengajuan</strong>.
+          3. <strong>Presensi Pulang hanya dapat ditekan tepat pada atau setelah jam kerja berakhir ({formatJamPulang} WIB)</strong> dan terkunci otomatis sebelum jam tersebut.
+          <br />
+          4. Jika berhalangan hadir karena dinas, sakit, atau keperluan izin lainnya, silakan ajukan melalui menu <strong>Pengajuan Cuti / Izin</strong>.
         </div>
       </div>
     </div>
   );
 }
+

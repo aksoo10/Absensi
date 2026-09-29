@@ -1,4 +1,5 @@
 import axios from 'axios';
+import authStorage from './authStorage';
 
 export const BACKEND_URL = 'http://127.0.0.1:8000';
 
@@ -13,7 +14,7 @@ const api = axios.create({
 
 // Request interceptor: attach token
 api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('token');
+  const token = authStorage.getToken();
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
@@ -26,8 +27,7 @@ api.interceptors.response.use(
   (error) => {
     const isLogoutReq = error.config?.url?.includes('/logout');
     if (error.response?.status === 401 && !isLogoutReq && !window.location.pathname.includes('/login')) {
-      localStorage.removeItem('token');
-      localStorage.removeItem('user');
+      authStorage.clear();
       window.location.href = '/login';
     }
     return Promise.reject(error);

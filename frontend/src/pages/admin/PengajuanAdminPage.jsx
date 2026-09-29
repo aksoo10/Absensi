@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import {
   CheckCircle, XCircle, Clock, Filter, FileText,
   FileCheck, Calendar, User, ExternalLink, AlertCircle,
-  ArrowLeft, Eye, X, Download, Loader2, RefreshCw
+  ArrowLeft, Eye, X, Download, Loader2, RefreshCw, Trash2, Search
 } from 'lucide-react';
 import api, { BACKEND_URL } from '../../lib/api';
 import cache from '../../lib/cache';
@@ -39,7 +39,11 @@ export default function PengajuanAdminPage() {
   const [pengajuans, setPengajuans] = useState(() => cached || []);
   const [loading, setLoading] = useState(() => cached === null);
   const [filterStatus, setFilterStatus] = useState('');
+  const [search, setSearch] = useState('');
   const [selected, setSelected] = useState(null);
+  const [itemToDelete, setItemToDelete] = useState(null);
+  const [deleting, setDeleting] = useState(false);
+  const [successMsg, setSuccessMsg] = useState('');
   const [previewDoc, setPreviewDoc] = useState(null);
   const [docLoaded, setDocLoaded] = useState(false);
   const [docError, setDocError] = useState(false);
@@ -145,6 +149,43 @@ export default function PengajuanAdminPage() {
     }
   };
 
+  const handleDelete = async () => {
+    if (!itemToDelete) return;
+    setDeleting(true);
+    try {
+      await api.delete(`/pengajuan/${itemToDelete.id}`);
+      cache.remove('admin_pengajuans');
+      cache.remove('admin_dashboard');
+      cache.remove('dashboard_pegawai');
+      cache.remove('pengajuan_list');
+
+      const nama = itemToDelete.pegawai?.nama || 'Pegawai';
+      setSuccessMsg(`Data pengajuan dari "${nama}" berhasil dihapus.`);
+      setTimeout(() => setSuccessMsg(''), 4000);
+
+      if (selected?.id === itemToDelete.id) {
+        setSelected(null);
+      }
+      setItemToDelete(null);
+      fetchPengajuan(filterStatus);
+    } catch (err) {
+      alert(err.response?.data?.message || 'Gagal menghapus data pengajuan');
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const filteredPengajuans = pengajuans.filter((p) => {
+    if (!search.trim()) return true;
+    const term = search.toLowerCase();
+    const nama = (p.pegawai?.nama || '').toLowerCase();
+    const jabatan = (p.pegawai?.jabatan || '').toLowerCase();
+    const jenis = (JENIS_MAP[p.jenis] || p.jenis || '').toLowerCase();
+    const alasan = (p.alasan || '').toLowerCase();
+    const status = (STATUS_MAP[p.status]?.label || p.status || '').toLowerCase();
+    return nama.includes(term) || jabatan.includes(term) || jenis.includes(term) || alasan.includes(term) || status.includes(term);
+  });
+
   const pendingCount = pengajuans.filter(p => p.status === 'pending').length;
 
   return (
@@ -156,26 +197,80 @@ export default function PengajuanAdminPage() {
         </div>
       </div>
 
+      {/* Success Notification Alert */}
+      {successMsg && (
+        <div className="alert alert-success" style={{ marginBottom: '16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <CheckCircle size={18} style={{ flexShrink: 0 }} />
+            <span>{successMsg}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setSuccessMsg('')}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'inherit', padding: 0 }}
+          >
+            <X size={16} />
+          </button>
+        </div>
+      )}
+
       {/* Filter Bar */}
       <div className="card">
         <div className="card-body" style={{ padding: '16px 20px' }}>
-          <div className="filter-bar">
-            <Filter size={16} style={{ color: 'var(--primary)' }} />
-            <span style={{ fontWeight: '600', color: 'var(--text)' }}>Status Pengajuan:</span>
-            {[
-              { id: '', label: 'Semua' },
-              { id: 'pending', label: 'Menunggu' },
-              { id: 'disetujui', label: 'Disetujui' },
-              { id: 'ditolak', label: 'Ditolak' }
-            ].map((s) => (
-              <button
-                key={s.id}
-                className={`btn-filter ${filterStatus === s.id ? 'active' : ''}`}
-                onClick={() => setFilterStatus(s.id)}
-              >
-                {s.label}
-              </button>
-            ))}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '14px' }}>
+            <div className="filter-bar" style={{ margin: 0 }}>
+              <Filter size={16} style={{ color: 'var(--primary)' }} />
+              <span style={{ fontWeight: '600', color: 'var(--text)' }}>Status:</span>
+              {[
+                { id: '', label: 'Semua' },
+                { id: 'pending', label: 'Menunggu' },
+                { id: 'disetujui', label: 'Disetujui' },
+                { id: 'ditolak', label: 'Ditolak' }
+              ].map((s) => (
+                <button
+                  key={s.id}
+                  className={`btn-filter ${filterStatus === s.id ? 'active' : ''}`}
+                  onClick={() => setFilterStatus(s.id)}
+                >
+                  {s.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Quick Search Box */}
+            <div style={{ position: 'relative', minWidth: '240px', flex: '1', maxWidth: '340px' }}>
+              <Search size={15} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+              <input
+                type="text"
+                className="form-input"
+                placeholder="Cari nama pegawai, alasan..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                style={{ paddingLeft: '34px', paddingRight: search ? '32px' : '12px', fontSize: '13px', height: '36px' }}
+              />
+              {search && (
+                <button
+                  type="button"
+                  onClick={() => setSearch('')}
+                  title="Hapus pencarian"
+                  style={{
+                    position: 'absolute',
+                    right: '10px',
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    background: 'none',
+                    border: 'none',
+                    cursor: 'pointer',
+                    color: 'var(--text-muted)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    padding: 0
+                  }}
+                >
+                  <X size={15} />
+                </button>
+              )}
+            </div>
           </div>
         </div>
       </div>
@@ -183,12 +278,17 @@ export default function PengajuanAdminPage() {
       {/* Table */}
       <div className="card">
         <div className="card-header">
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
             <FileText size={18} style={{ color: 'var(--primary)' }} />
             <h3 className="card-title" style={{ margin: 0 }}>Daftar Pengajuan Masuk</h3>
             {pendingCount > 0 && (
               <span className="badge badge-warning" style={{ fontSize: '11.5px' }}>
                 {pendingCount} Perlu Ditindaklanjuti
+              </span>
+            )}
+            {search && (
+              <span className="badge badge-info" style={{ fontSize: '11.5px' }}>
+                {filteredPengajuans.length} Ditemukan
               </span>
             )}
           </div>
@@ -210,13 +310,13 @@ export default function PengajuanAdminPage() {
                 </tr>
               </thead>
               <tbody>
-                {pengajuans.length === 0 ? (
+                {filteredPengajuans.length === 0 ? (
                   <tr>
                     <td colSpan={6} className="empty-row">
-                      Tidak ada permohonan pengajuan pada kategori ini
+                      {search ? `Tidak ada permohonan yang cocok dengan kata kunci "${search}"` : 'Tidak ada permohonan pengajuan pada kategori ini'}
                     </td>
                   </tr>
-                ) : pengajuans.map((p) => {
+                ) : filteredPengajuans.map((p) => {
                   const status = STATUS_MAP[p.status] || STATUS_MAP.pending;
                   const StatusIcon = status.icon;
                   return (
@@ -281,23 +381,37 @@ export default function PengajuanAdminPage() {
                         </span>
                       </td>
                       <td style={{ textAlign: 'center' }}>
-                        {p.status === 'pending' ? (
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                          {p.status === 'pending' ? (
+                            <button
+                              className="btn btn-sm btn-primary"
+                              onClick={() => { setSelected(p); setCatatan(''); }}
+                              title="Tinjau & Verifikasi Permohonan"
+                              style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                            >
+                              Verifikasi
+                            </button>
+                          ) : (
+                            <div style={{ fontSize: '11.5px', color: 'var(--text-muted)', lineHeight: 1.2, textAlign: 'right' }}>
+                              <span style={{ fontWeight: '600' }}>Selesai</span>
+                              {p.diproses_pada && (
+                                <div style={{ fontSize: '10.5px', opacity: 0.8 }}>
+                                  {new Date(p.diproses_pada).toLocaleDateString('id-ID')}
+                                </div>
+                              )}
+                            </div>
+                          )}
+
                           <button
-                            className="btn btn-sm btn-primary"
-                            onClick={() => { setSelected(p); setCatatan(''); }}
+                            type="button"
+                            className="btn-icon btn-delete"
+                            onClick={() => setItemToDelete(p)}
+                            title="Hapus permohonan pengajuan ini"
+                            aria-label="Hapus pengajuan"
                           >
-                            Verifikasi
+                            <Trash2 size={14} />
                           </button>
-                        ) : (
-                          <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-                            <div>Selesai diproses</div>
-                            {p.diproses_pada && (
-                              <div style={{ fontSize: '11px' }}>
-                                {new Date(p.diproses_pada).toLocaleDateString('id-ID')}
-                              </div>
-                            )}
-                          </div>
-                        )}
+                        </div>
                       </td>
                     </tr>
                   );
@@ -374,9 +488,30 @@ export default function PengajuanAdminPage() {
             </div>
 
             <div className="modal-footer" style={{ justifyContent: 'space-between' }}>
-              <button className="btn btn-secondary" onClick={() => setSelected(null)}>
-                Batal
-              </button>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button
+                  type="button"
+                  className="btn btn-outline"
+                  style={{
+                    color: 'var(--danger)',
+                    borderColor: 'rgba(239, 68, 68, 0.35)',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '6px'
+                  }}
+                  onClick={() => {
+                    const toDelete = selected;
+                    setSelected(null);
+                    setItemToDelete(toDelete);
+                  }}
+                  title="Hapus data permohonan pengajuan ini"
+                >
+                  <Trash2 size={15} /> Hapus
+                </button>
+                <button className="btn btn-secondary" onClick={() => setSelected(null)}>
+                  Batal
+                </button>
+              </div>
               <div style={{ display: 'flex', gap: '8px' }}>
                 <button
                   className="btn btn-danger"
@@ -654,6 +789,132 @@ export default function PengajuanAdminPage() {
                 ) : (
                   <>
                     <Download size={15} /> Unduh File
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Konfirmasi Hapus Permohonan Pengajuan */}
+      {itemToDelete && (
+        <div className="modal-overlay" onClick={() => !deleting && setItemToDelete(null)}>
+          <div
+            className="modal"
+            onClick={(e) => e.stopPropagation()}
+            style={{ maxWidth: '480px' }}
+          >
+            <div className="modal-header" style={{ borderBottomColor: 'rgba(239, 68, 68, 0.2)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <div style={{
+                  width: '36px',
+                  height: '36px',
+                  borderRadius: '10px',
+                  background: 'var(--danger-light)',
+                  color: 'var(--danger)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexShrink: 0
+                }}>
+                  <Trash2 size={18} />
+                </div>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: '16px', color: 'var(--text)' }}>
+                    Hapus Data Pengajuan?
+                  </h3>
+                  <p style={{ margin: '2px 0 0', fontSize: '12px', color: 'var(--text-muted)' }}>
+                    Tindakan ini tidak dapat dibatalkan
+                  </p>
+                </div>
+              </div>
+              <button
+                className="modal-close"
+                disabled={deleting}
+                onClick={() => setItemToDelete(null)}
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="modal-body">
+              <p style={{ fontSize: '13.5px', color: 'var(--text)', marginBottom: '14px', lineHeight: 1.5 }}>
+                Apakah Anda yakin ingin menghapus data permohonan pengajuan pegawai berikut?
+              </p>
+
+              <div style={{
+                background: 'var(--bg)',
+                borderRadius: '8px',
+                padding: '12px 14px',
+                border: '1px solid var(--border)',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '8px',
+                fontSize: '13px'
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ color: 'var(--text-muted)' }}>Pegawai Pemohon:</span>
+                  <span style={{ fontWeight: '600', color: 'var(--text)' }}>
+                    {itemToDelete.pegawai?.nama || 'Pegawai'}
+                  </span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ color: 'var(--text-muted)' }}>Jenis Pengajuan:</span>
+                  <span style={{ fontWeight: '600', color: 'var(--text)' }}>
+                    {JENIS_MAP[itemToDelete.jenis] || itemToDelete.jenis}
+                  </span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ color: 'var(--text-muted)' }}>Rentang Waktu:</span>
+                  <span style={{ fontWeight: '600', color: 'var(--text)' }}>
+                    {new Date(itemToDelete.tanggal_mulai).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}
+                    {itemToDelete.tanggal_mulai !== itemToDelete.tanggal_selesai && ` s/d ${new Date(itemToDelete.tanggal_selesai).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}`}
+                  </span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ color: 'var(--text-muted)' }}>Status:</span>
+                  <span className={`badge ${STATUS_MAP[itemToDelete.status]?.class || 'badge-warning'}`} style={{ padding: '2px 8px', fontSize: '11px' }}>
+                    {STATUS_MAP[itemToDelete.status]?.label || itemToDelete.status}
+                  </span>
+                </div>
+                {itemToDelete.dokumen && (
+                  <div style={{
+                    marginTop: '4px',
+                    paddingTop: '8px',
+                    borderTop: '1px dashed var(--border)',
+                    fontSize: '11.5px',
+                    color: 'var(--text-muted)'
+                  }}>
+                    Lampiran file bukti pengajuan juga akan dibersihkan secara permanen dari server.
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="modal-footer" style={{ justifyContent: 'flex-end', gap: '10px' }}>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                disabled={deleting}
+                onClick={() => setItemToDelete(null)}
+              >
+                Batal (Jangan Hapus)
+              </button>
+              <button
+                type="button"
+                className="btn btn-danger"
+                disabled={deleting}
+                onClick={handleDelete}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+              >
+                {deleting ? (
+                  <>
+                    <Loader2 size={15} className="animate-spin" /> Menghapus...
+                  </>
+                ) : (
+                  <>
+                    <Trash2 size={15} /> Ya, Hapus Pengajuan
                   </>
                 )}
               </button>

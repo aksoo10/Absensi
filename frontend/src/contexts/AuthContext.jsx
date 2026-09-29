@@ -1,43 +1,38 @@
 import { createContext, useContext, useState, useEffect } from 'react';
 import api from '../lib/api';
 import cache from '../lib/cache';
+import authStorage from '../lib/authStorage';
 
 const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(() => {
-    try {
-      const saved = localStorage.getItem('user');
-      return saved ? JSON.parse(saved) : null;
-    } catch {
-      return null;
-    }
+    return authStorage.getUser();
   });
 
   // Fast boot: Don't block render with full spinner if user credentials are already cached
   const [loading, setLoading] = useState(() => {
-    const token = localStorage.getItem('token');
-    const saved = localStorage.getItem('user');
+    const token = authStorage.getToken();
+    const saved = authStorage.getUser();
     return Boolean(token && !saved);
   });
 
   useEffect(() => {
-    const token = localStorage.getItem('token');
-    const saved = localStorage.getItem('user');
+    const token = authStorage.getToken();
+    const saved = authStorage.getUser();
 
     if (token) {
       if (!saved) {
         // No cached user profile: fetch immediately
         api.get('/user')
           .then(({ data }) => {
-            if (!localStorage.getItem('token')) return;
+            if (!authStorage.getToken()) return;
             setUser(data);
-            localStorage.setItem('user', JSON.stringify(data));
+            authStorage.setUser(data);
           })
           .catch((err) => {
             if (err.response?.status === 401) {
-              localStorage.removeItem('token');
-              localStorage.removeItem('user');
+              authStorage.clear();
               cache.clear();
               setUser(null);
             }
@@ -47,17 +42,16 @@ export function AuthProvider({ children }) {
         // User already cached: slight delay so critical page request executes first
         setLoading(false);
         const timer = setTimeout(() => {
-          if (!localStorage.getItem('token')) return;
+          if (!authStorage.getToken()) return;
           api.get('/user')
             .then(({ data }) => {
-              if (!localStorage.getItem('token')) return;
+              if (!authStorage.getToken()) return;
               setUser(data);
-              localStorage.setItem('user', JSON.stringify(data));
+              authStorage.setUser(data);
             })
             .catch((err) => {
               if (err.response?.status === 401) {
-                localStorage.removeItem('token');
-                localStorage.removeItem('user');
+                authStorage.clear();
                 cache.clear();
                 setUser(null);
               }
@@ -72,8 +66,8 @@ export function AuthProvider({ children }) {
 
   const login = async (email, password) => {
     const { data } = await api.post('/login', { email, password });
-    localStorage.setItem('token', data.token);
-    localStorage.setItem('user', JSON.stringify(data.user));
+    authStorage.setToken(data.token);
+    authStorage.setUser(data.user);
     setUser(data.user);
 
     // Pre-warm bootstrap in background immediately upon login so all menus are pre-cached
@@ -91,6 +85,11 @@ export function AuthProvider({ children }) {
         if (boot.jadwals) cache.set('admin_jadwals', boot.jadwals);
         if (boot.pengajuans) cache.set('admin_pengajuans', boot.pengajuans);
         if (boot.notifikasi) cache.set('notifikasi', boot.notifikasi);
+        if (boot.laporan && Array.isArray(boot.laporan)) {
+          const m = new Date().getMonth() + 1;
+          const y = new Date().getFullYear();
+          cache.set(`admin_laporan_${m}_${y}`, boot.laporan);
+        }
       } else {
         if (boot.dashboard_pegawai) cache.set('dashboard_pegawai', boot.dashboard_pegawai);
         if (boot.absensi_hari_ini) cache.set('absensi_hari_ini', boot.absensi_hari_ini);
@@ -108,14 +107,10 @@ export function AuthProvider({ children }) {
   };
 
   const logout = async () => {
-    const token = localStorage.getItem('token');
+    const token = authStorage.getToken();
 
     // 1. Immediately wipe client credentials & cache so UI updates instantly
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
-    try {
-      sessionStorage.clear();
-    } catch {}
+    authStorage.clear();
     cache.clear();
     setUser(null);
 
@@ -131,7 +126,7 @@ export function AuthProvider({ children }) {
 
   const updateUser = (updatedUser) => {
     setUser(updatedUser);
-    localStorage.setItem('user', JSON.stringify(updatedUser));
+    authStorage.setUser(updatedUser);
   };
 
   return (

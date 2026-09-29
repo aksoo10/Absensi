@@ -92,45 +92,68 @@ class LaporanController extends Controller
             'pegawai_id' => 'nullable|exists:pegawais,id',
         ]);
 
-        $bulan = $request->bulan;
-        $tahun = $request->tahun;
+        $bulan = (int) $request->bulan;
+        $tahun = (int) $request->tahun;
+        $pegawaiId = $request->pegawai_id;
 
-        $query = Pegawai::with(['absensis' => function ($q) use ($bulan, $tahun) {
-            $q->whereMonth('tanggal', $bulan)->whereYear('tanggal', $tahun);
-        }, 'pengajuans' => function ($q) use ($bulan, $tahun) {
-            $q->whereMonth('tanggal_mulai', $bulan)->whereYear('tanggal_mulai', $tahun)->where('status', 'disetujui');
-        }])->where('status', 'aktif');
+        $cacheKey = "laporan_absensi_{$bulan}_{$tahun}" . ($pegawaiId ? "_{$pegawaiId}" : '');
 
-        if ($request->pegawai_id) {
-            $query->where('id', $request->pegawai_id);
-        }
+        $laporan = Cache::remember($cacheKey, 60, function () use ($bulan, $tahun, $pegawaiId) {
+            $startDate = sprintf('%04d-%02d-01', $tahun, $bulan);
+            $endDate = date('Y-m-t', strtotime($startDate));
 
-        $pegawais = $query->get();
-
-        $laporan = $pegawais->map(function ($pegawai) {
-            $absensis = $pegawai->absensis;
-            $pengajuans = $pegawai->pengajuans;
-
-            return [
-                'pegawai_id' => $pegawai->id,
-                'nama' => $pegawai->nama,
-                'nip' => $pegawai->nip,
-                'nik' => $pegawai->nik,
-                'jabatan' => $pegawai->jabatan,
-                'hadir' => $absensis->whereNotNull('jam_masuk')->count(),
-                'terlambat' => $absensis->where('status_masuk', 'terlambat')->count(),
-                'tepat_waktu' => $absensis->where('status_masuk', 'tepat_waktu')->count(),
-                'izin' => $pengajuans->where('jenis', 'izin')->count(),
-                'sakit' => $pengajuans->where('jenis', 'sakit')->count(),
-                'dinas_luar' => $pengajuans->where('jenis', 'dinas_luar')->count(),
-                'total_jam_kerja' => (int) round($absensis->sum(function ($a) {
-                    if ($a->jam_masuk && $a->jam_pulang) {
-                        return max(0, (strtotime($a->jam_pulang) - strtotime($a->jam_masuk)) / 3600);
+            $query = Pegawai::select('id', 'nama', 'nip', 'nik', 'jabatan', 'status')
+                ->with([
+                    'absensis' => function ($q) use ($startDate, $endDate) {
+                        $q->select('id', 'pegawai_id', 'tanggal', 'jam_masuk', 'jam_pulang', 'status_masuk')
+                          ->whereBetween('tanggal', [$startDate, $endDate]);
+                    },
+                    'pengajuans' => function ($q) use ($startDate, $endDate) {
+                        $q->select('id', 'pegawai_id', 'jenis', 'tanggal_mulai', 'status')
+                          ->whereBetween('tanggal_mulai', [$startDate, $endDate])
+                          ->where('status', 'disetujui');
                     }
-                    return 0;
-                })),
-            ];
+                ])
+                ->where('status', 'aktif');
+
+            if ($pegawaiId) {
+                $query->where('id', $pegawaiId);
+            }
+
+            $pegawais = $query->orderBy('nama')->get();
+
+            return $pegawais->map(function ($pegawai) {
+                $absensis = $pegawai->absensis;
+                $pengajuans = $pegawai->pengajuans;
+
+                return [
+                    'pegawai_id' => $pegawai->id,
+                    'nama' => $pegawai->nama,
+                    'nip' => $pegawai->nip,
+                    'nik' => $pegawai->nik,
+                    'jabatan' => $pegawai->jabatan,
+                    'hadir' => $absensis->whereNotNull('jam_masuk')->count(),
+                    'terlambat' => $absensis->where('status_masuk', 'terlambat')->count(),
+                    'tepat_waktu' => $absensis->where('status_masuk', 'tepat_waktu')->count(),
+                    'izin' => $pengajuans->where('jenis', 'izin')->count(),
+                    'sakit' => $pengajuans->where('jenis', 'sakit')->count(),
+                    'dinas_luar' => $pengajuans->where('jenis', 'dinas_luar')->count(),
+                    'total_jam_kerja' => (int) round($absensis->sum(function ($a) {
+                        if ($a->jam_masuk && $a->jam_pulang) {
+                            return max(0, (strtotime($a->jam_pulang) - strtotime($a->jam_masuk)) / 3600);
+                        }
+                        return 0;
+                    })),
+                ];
+            })->values()->all();
         });
+
+        if ($laporan instanceof \Illuminate\Support\Collection) {
+            $laporan = $laporan->values()->all();
+        } elseif (!is_array($laporan)) {
+            Cache::forget($cacheKey);
+            $laporan = [];
+        }
 
         return response()->json([
             'bulan' => $bulan,

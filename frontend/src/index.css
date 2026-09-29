@@ -1244,6 +1244,33 @@ a {
   font-size: 14px;
 }
 
+/* ─── Compact Table for Rekapitulasi & Laporan ─── */
+.table-rekap {
+  font-size: 12px;
+}
+
+.table-rekap th {
+  padding: 10px 8px !important;
+  font-size: 10.5px !important;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  background: #f8fafc;
+  white-space: nowrap;
+}
+
+.table-rekap td {
+  padding: 8px 8px !important;
+  font-size: 12px !important;
+  vertical-align: middle;
+  line-height: 1.35;
+}
+
+.table-rekap td .badge {
+  padding: 2px 7px !important;
+  font-size: 11px !important;
+  font-weight: 600;
+}
+
 /* ─── Status Badges ──────────────────────────────────────────────────────── */
 .badge {
   display: inline-flex;
