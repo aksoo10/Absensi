@@ -3,7 +3,7 @@ import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import {
   LayoutDashboard, Clock, FileText, History,
-  LogOut, Building2, Menu, X, ChevronDown
+  LogOut, Building2, Menu, X, ChevronDown, UserCog
 } from 'lucide-react';
 import NotificationDropdown from '../components/NotificationDropdown';
 import api from '../lib/api';
@@ -14,6 +14,7 @@ const pegawaiNavItems = [
   { to: '/absensi', icon: Clock, label: 'Presensi Harian' },
   { to: '/pengajuan', icon: FileText, label: 'Pengajuan Cuti / Izin' },
   { to: '/riwayat', icon: History, label: 'Riwayat Kehadiran' },
+  { to: '/akun', icon: UserCog, label: 'Pengaturan Akun' },
 ];
 
 const routeBreadcrumbMap = {
@@ -21,6 +22,7 @@ const routeBreadcrumbMap = {
   '/absensi': 'Presensi Harian',
   '/pengajuan': 'Pengajuan Ketidakhadiran',
   '/riwayat': 'Riwayat & Rekap Saya',
+  '/akun': 'Pengaturan Akun & Profil',
 };
 
 export default function PegawaiLayout() {
@@ -43,6 +45,9 @@ export default function PegawaiLayout() {
           if (boot.absensi_hari_ini) cache.set('absensi_hari_ini', boot.absensi_hari_ini);
           if (boot.pengajuans) cache.set('pengajuan_list', boot.pengajuans);
           if (boot.notifikasi) cache.set('notifikasi', boot.notifikasi);
+          if (boot.riwayat_bulan_ini && boot.bulan && boot.tahun) {
+            cache.set(`riwayat_${boot.bulan}_${boot.tahun}_1`, boot.riwayat_bulan_ini);
+          }
         })
         .catch(() => {});
     }
@@ -68,9 +73,10 @@ export default function PegawaiLayout() {
         const y = new Date().getFullYear();
         const key = `riwayat_${m}_${y}_1`;
         if (!cache.get(key)) {
-          api.get('/absensi', { params: { bulan: m, tahun: y, page: 1 } }).then(({ data }) => {
-            cache.set(key, data);
-          }).catch(() => {});
+          cache.fetchDedup(`req_${key}`, () => api.get('/absensi', { params: { bulan: m, tahun: y, page: 1, per_page: 50 } }))
+            .then(({ data }) => {
+              cache.set(key, data);
+            }).catch(() => {});
         }
       }
     } catch {
@@ -149,7 +155,12 @@ export default function PegawaiLayout() {
 
         <div className="sidebar-footer">
           {sidebarOpen && (
-            <div className="sidebar-user-preview">
+            <NavLink
+              to="/akun"
+              className="sidebar-user-preview"
+              title="Klik untuk Pengaturan Akun & Profil"
+              style={{ textDecoration: 'none', cursor: 'pointer' }}
+            >
               <div className="avatar avatar-sm avatar-pegawai">
                 {user?.name?.[0]?.toUpperCase() || 'P'}
               </div>
@@ -157,7 +168,7 @@ export default function PegawaiLayout() {
                 <div className="sidebar-user-name">{user?.name || 'Pegawai'}</div>
                 <div className="sidebar-user-role" style={{ color: '#34d399' }}>Aparatur Desa</div>
               </div>
-            </div>
+            </NavLink>
           )}
           <button type="button" className="nav-item logout-btn" onClick={handleLogout}>
             <LogOut size={18} />
@@ -191,6 +202,14 @@ export default function PegawaiLayout() {
                     <div style={{ fontSize: '12.5px', fontWeight: '700', color: 'var(--text)' }}>{user?.name}</div>
                     <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{user?.email}</div>
                   </div>
+                  <NavLink
+                    to="/akun"
+                    onClick={() => setProfileOpen(false)}
+                    className="dropdown-item"
+                    style={{ textDecoration: 'none' }}
+                  >
+                    <UserCog size={15} /> Pengaturan Akun
+                  </NavLink>
                   <button type="button" onClick={handleLogout} className="dropdown-item danger" style={{ marginTop: '4px' }}>
                     <LogOut size={15} /> Keluar
                   </button>

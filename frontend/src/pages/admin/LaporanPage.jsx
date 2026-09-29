@@ -7,36 +7,80 @@ export default function LaporanPage() {
   const currentMonth = new Date().getMonth() + 1;
   const currentYear = new Date().getFullYear();
 
-  const getCachedLaporan = (m, y) => {
-    const val = cache.get(`admin_laporan_${m}_${y}`);
-    return Array.isArray(val) ? val : null;
+  const bulanNames = [
+    'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
+    'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
+  ];
+
+  const getWeeksInMonth = (m, y) => {
+    const lastDay = new Date(y, m, 0).getDate();
+    const monthName = bulanNames[m - 1];
+    return [
+      { id: 1, label: `Minggu 1 (01 - 07 ${monthName})` },
+      { id: 2, label: `Minggu 2 (08 - 14 ${monthName})` },
+      { id: 3, label: `Minggu 3 (15 - 21 ${monthName})` },
+      { id: 4, label: `Minggu 4 (22 - 28 ${monthName})` },
+      { id: 5, label: `Minggu 5 (29 - ${lastDay} ${monthName})` },
+    ];
   };
 
+  const getCachedLaporan = (t, m, y, w = 1) => {
+    const key = `admin_laporan_${t}_${m}_${y}${t === 'mingguan' ? `_${w}` : ''}`;
+    const val = cache.get(key);
+    if (val && Array.isArray(val.laporan)) return val;
+    // Fallback legacy cache key
+    if (t === 'bulanan') {
+      const legacy = cache.get(`admin_laporan_${m}_${y}`);
+      if (Array.isArray(legacy)) return { laporan: legacy, periode_label: `Bulan ${bulanNames[m - 1]} ${y}` };
+    }
+    return null;
+  };
+
+  const [tipe, setTipe] = useState('bulanan'); // 'bulanan' | 'mingguan'
   const [bulan, setBulan] = useState(currentMonth);
   const [tahun, setTahun] = useState(currentYear);
-  const [laporan, setLaporan] = useState(() => getCachedLaporan(currentMonth, currentYear) || []);
-  const [loading, setLoading] = useState(() => getCachedLaporan(currentMonth, currentYear) === null);
+  const [minggu, setMinggu] = useState(1);
+  const [periodeLabel, setPeriodeLabel] = useState(`Bulan ${bulanNames[currentMonth - 1]} ${currentYear}`);
+
+  const initialCache = getCachedLaporan('bulanan', currentMonth, currentYear);
+  const [laporan, setLaporan] = useState(() => initialCache?.laporan || []);
+  const [loading, setLoading] = useState(() => initialCache === null);
   const [isSyncing, setIsSyncing] = useState(false);
 
-  const fetchLaporan = (force = false) => {
-    const key = `admin_laporan_${bulan}_${tahun}`;
-    const cached = getCachedLaporan(bulan, tahun);
+  const activeLabel = periodeLabel || (tipe === 'mingguan'
+    ? `Minggu ke-${minggu} (${bulanNames[bulan - 1]} ${tahun})`
+    : `Bulan ${bulanNames[bulan - 1]} ${tahun}`);
 
-    if (cached !== null && !force) {
-      setLaporan(cached);
+  const fetchLaporan = (force = false, currentTipe = tipe, currentBulan = bulan, currentTahun = tahun, currentMinggu = minggu) => {
+    const key = `admin_laporan_${currentTipe}_${currentBulan}_${currentTahun}${currentTipe === 'mingguan' ? `_${currentMinggu}` : ''}`;
+    const cached = getCachedLaporan(currentTipe, currentBulan, currentTahun, currentMinggu);
+
+    if (cached !== null && !force && Array.isArray(cached.laporan)) {
+      setLaporan(cached.laporan);
+      if (cached.periode_label) setPeriodeLabel(cached.periode_label);
       setLoading(false);
       setIsSyncing(true);
     } else {
       setLoading(true);
     }
 
+    const params = {
+      tipe: currentTipe,
+      bulan: currentBulan,
+      tahun: currentTahun,
+      ...(currentTipe === 'mingguan' ? { minggu: currentMinggu } : {})
+    };
+
     cache.fetchDedup(key, () =>
-      api.get('/laporan/absensi', { params: { bulan, tahun } })
+      api.get('/laporan/absensi', { params })
     )
       .then(({ data }) => {
         const list = Array.isArray(data?.laporan) ? data.laporan : [];
         setLaporan(list);
-        cache.set(key, list);
+        if (data.periode_label) {
+          setPeriodeLabel(data.periode_label);
+        }
+        cache.set(key, { laporan: list, periode_label: data.periode_label });
       })
       .catch((err) => {
         console.error('Gagal mengambil laporan absensi:', err);
@@ -48,13 +92,8 @@ export default function LaporanPage() {
   };
 
   useEffect(() => {
-    fetchLaporan();
-  }, [bulan, tahun]);
-
-  const bulanNames = [
-    'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
-    'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
-  ];
+    fetchLaporan(false, tipe, bulan, tahun, minggu);
+  }, [tipe, bulan, tahun, minggu]);
 
   const handlePrint = () => {
     window.print();
@@ -95,7 +134,9 @@ export default function LaporanPage() {
       <div className="page-header no-print">
         <div>
           <h1 className="page-title">Rekapitulasi & Laporan Presensi</h1>
-          <p className="page-desc">Laporan akumulasi kehadiran bulanan aparatur Pemerintah Desa Bailangu Timur</p>
+          <p className="page-desc">
+            Laporan akumulasi kehadiran {tipe === 'mingguan' ? 'mingguan' : 'bulanan'} aparatur Pemerintah Desa Bailangu Timur
+          </p>
         </div>
         <div style={{ display: 'flex', gap: '10px' }}>
           <button className="btn btn-primary" onClick={handlePrint} disabled={loading && laporanList.length === 0}>
@@ -105,44 +146,128 @@ export default function LaporanPage() {
       </div>
 
       {/* ─── 2. Tampilan Layar: Filter Periode (Disembunyikan Saat Cetak) ─── */}
-      <div className="card no-print">
+      <div className="card no-print" style={{ marginBottom: '20px' }}>
         <div className="card-body" style={{ padding: '16px 20px' }}>
-          <div className="filter-bar" style={{ justifyContent: 'space-between' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: '600', color: 'var(--text)' }}>
-                <Calendar size={18} style={{ color: 'var(--primary)' }} />
-                <span>Pilih Periode:</span>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+            {/* Switcher Tipe Rekap (Bulanan / Mingguan) */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                <span style={{ fontSize: '13px', fontWeight: '600', color: 'var(--text)' }}>Pilihan Rekap:</span>
+                <div style={{
+                  display: 'inline-flex',
+                  padding: '3px',
+                  background: 'var(--bg-alt, #f1f5f9)',
+                  borderRadius: '10px',
+                  border: '1px solid var(--border)'
+                }}>
+                  <button
+                    type="button"
+                    onClick={() => { setTipe('bulanan'); }}
+                    style={{
+                      padding: '6px 16px',
+                      fontSize: '13px',
+                      fontWeight: '700',
+                      borderRadius: '8px',
+                      border: 'none',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s',
+                      background: tipe === 'bulanan' ? 'var(--primary)' : 'transparent',
+                      color: tipe === 'bulanan' ? '#ffffff' : 'var(--text-muted)',
+                      boxShadow: tipe === 'bulanan' ? '0 2px 6px rgba(37, 99, 235, 0.25)' : 'none'
+                    }}
+                  >
+                    Rekap Bulanan
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setTipe('mingguan'); }}
+                    style={{
+                      padding: '6px 16px',
+                      fontSize: '13px',
+                      fontWeight: '700',
+                      borderRadius: '8px',
+                      border: 'none',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s',
+                      background: tipe === 'mingguan' ? 'var(--primary)' : 'transparent',
+                      color: tipe === 'mingguan' ? '#ffffff' : 'var(--text-muted)',
+                      boxShadow: tipe === 'mingguan' ? '0 2px 6px rgba(37, 99, 235, 0.25)' : 'none'
+                    }}
+                  >
+                    Rekap Mingguan
+                  </button>
+                </div>
               </div>
-              <select
-                className="form-input w-auto"
-                value={bulan}
-                onChange={(e) => setBulan(Number(e.target.value))}
-              >
-                {bulanNames.map((b, i) => (
-                  <option key={i} value={i + 1}>{b}</option>
-                ))}
-              </select>
-              <select
-                className="form-input w-auto"
-                value={tahun}
-                onChange={(e) => setTahun(Number(e.target.value))}
-              >
-                {[2024, 2025, 2026, 2027].map((y) => (
-                  <option key={y} value={y}>{y}</option>
-                ))}
-              </select>
-              <button className="btn btn-primary" onClick={() => fetchLaporan(true)} disabled={loading}>
-                {loading ? <span className="spinner-sm" /> : 'Tampilkan Data'}
-              </button>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '13px', color: 'var(--text-muted)', fontWeight: '500' }}>
+                {isSyncing && (
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', color: 'var(--primary)', fontSize: '12px' }}>
+                    <RefreshCw size={12} className="animate-spin" /> Memperbarui...
+                  </span>
+                )}
+                <span>Periode Aktif: <strong style={{ color: 'var(--primary)' }}>{activeLabel}</strong></span>
+              </div>
             </div>
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '13px', color: 'var(--text-muted)', fontWeight: '500' }}>
-              {isSyncing && (
-                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', color: 'var(--primary)', fontSize: '12px' }}>
-                  <RefreshCw size={12} className="animate-spin" /> Memperbarui...
-                </span>
-              )}
-              <span>Periode Aktif: <strong>{bulanNames[bulan - 1]} {tahun}</strong></span>
+            {/* Filter Controls Bar */}
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              flexWrap: 'wrap',
+              gap: '12px',
+              paddingTop: '12px',
+              borderTop: '1px solid var(--border-light)'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: '600', color: 'var(--text)', fontSize: '13.5px' }}>
+                  <Calendar size={17} style={{ color: 'var(--primary)' }} />
+                  <span>{tipe === 'mingguan' ? 'Pilih Minggu & Bulan:' : 'Pilih Periode Bulan:'}</span>
+                </div>
+
+                {/* Dropdown Minggu (khusus saat mode Mingguan) */}
+                {tipe === 'mingguan' && (
+                  <select
+                    className="form-input w-auto"
+                    value={minggu}
+                    onChange={(e) => setMinggu(Number(e.target.value))}
+                    style={{ fontWeight: '600', color: 'var(--text)' }}
+                  >
+                    {getWeeksInMonth(bulan, tahun).map((w) => (
+                      <option key={w.id} value={w.id}>{w.label}</option>
+                    ))}
+                  </select>
+                )}
+
+                <select
+                  className="form-input w-auto"
+                  value={bulan}
+                  onChange={(e) => setBulan(Number(e.target.value))}
+                >
+                  {bulanNames.map((b, i) => (
+                    <option key={i} value={i + 1}>{b}</option>
+                  ))}
+                </select>
+
+                <select
+                  className="form-input w-auto"
+                  value={tahun}
+                  onChange={(e) => setTahun(Number(e.target.value))}
+                >
+                  {[2024, 2025, 2026, 2027].map((y) => (
+                    <option key={y} value={y}>{y}</option>
+                  ))}
+                </select>
+
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  onClick={() => fetchLaporan(true, tipe, bulan, tahun, minggu)}
+                  disabled={loading}
+                >
+                  {loading ? <span className="spinner-sm" /> : 'Tampilkan Data'}
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -181,11 +306,11 @@ export default function LaporanPage() {
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <FileBarChart size={18} style={{ color: 'var(--primary)' }} />
             <h3 className="card-title" style={{ margin: 0 }}>
-              Rekapitulasi Kehadiran Bulan {bulanNames[bulan - 1]} {tahun}
+              Rekapitulasi Kehadiran {activeLabel}
             </h3>
           </div>
           <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-            Kantor Kepala Desa Bailangu Timur
+            Kantor Kepala Desa Bailangu Timur &bull; {tipe === 'mingguan' ? 'Rekap Mingguan' : 'Rekap Bulanan'}
           </span>
         </div>
 
@@ -218,7 +343,7 @@ export default function LaporanPage() {
               ) : laporanList.length === 0 ? (
                 <tr>
                   <td colSpan={12} className="empty-row" style={{ padding: '36px !important' }}>
-                    Tidak ada catatan presensi pada periode {bulanNames[bulan - 1]} {tahun}
+                    Tidak ada catatan presensi pada {activeLabel}
                   </td>
                 </tr>
               ) : (
@@ -298,9 +423,11 @@ export default function LaporanPage() {
 
         {/* Judul Laporan Cetak */}
         <div className="print-report-header">
-          <h3 className="print-report-title">REKAPITULASI LAPORAN KEHADIRAN PEGAWAI</h3>
+          <h3 className="print-report-title">
+            REKAPITULASI LAPORAN KEHADIRAN PEGAWAI {tipe === 'mingguan' ? '(MINGGUAN)' : '(BULANAN)'}
+          </h3>
           <p className="print-report-subtitle">
-            Periode: Bulan {bulanNames[bulan - 1]} {tahun}
+            Periode: {activeLabel}
           </p>
         </div>
 
@@ -335,7 +462,7 @@ export default function LaporanPage() {
             {laporan.length === 0 ? (
               <tr>
                 <td colSpan={12} style={{ textAlign: 'center', padding: '14px' }}>
-                  Tidak ada catatan presensi pada periode {bulanNames[bulan - 1]} {tahun}
+                  Tidak ada catatan presensi pada {activeLabel}
                 </td>
               </tr>
             ) : (

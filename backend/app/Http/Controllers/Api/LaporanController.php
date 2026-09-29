@@ -82,26 +82,77 @@ class LaporanController extends Controller
     }
 
     /**
-     * Laporan absensi per periode
+     * Laporan absensi per periode (Bulanan & Mingguan)
      */
     public function absensi(Request $request)
     {
         $request->validate([
-            'bulan' => 'required|integer|between:1,12',
-            'tahun' => 'required|integer|min:2020|max:2099',
+            'tipe' => 'nullable|in:bulanan,mingguan',
+            'bulan' => 'nullable|integer|between:1,12',
+            'tahun' => 'nullable|integer|min:2020|max:2099',
+            'minggu' => 'nullable|integer|between:1,5',
+            'start_date' => 'nullable|date',
+            'end_date' => 'nullable|date',
             'pegawai_id' => 'nullable|exists:pegawais,id',
         ]);
 
-        $bulan = (int) $request->bulan;
-        $tahun = (int) $request->tahun;
+        $tipe = $request->input('tipe', 'bulanan');
+        $bulan = (int) ($request->bulan ?: now()->month);
+        $tahun = (int) ($request->tahun ?: now()->year);
+        $minggu = $request->filled('minggu') ? (int) $request->minggu : 1;
         $pegawaiId = $request->pegawai_id;
 
-        $cacheKey = "laporan_absensi_{$bulan}_{$tahun}" . ($pegawaiId ? "_{$pegawaiId}" : '');
+        $namaBulan = [
+            1 => 'Januari', 2 => 'Februari', 3 => 'Maret', 4 => 'April',
+            5 => 'Mei', 6 => 'Juni', 7 => 'Juli', 8 => 'Agustus',
+            9 => 'September', 10 => 'Oktober', 11 => 'November', 12 => 'Desember'
+        ];
 
-        $laporan = Cache::remember($cacheKey, 60, function () use ($bulan, $tahun, $pegawaiId) {
+        if ($request->filled('start_date') && $request->filled('end_date')) {
+            $startDate = $request->start_date;
+            $endDate = $request->end_date;
+            $periodeLabel = Carbon::parse($startDate)->locale('id')->isoFormat('D MMM Y') . ' s/d ' . Carbon::parse($endDate)->locale('id')->isoFormat('D MMM Y');
+        } elseif ($tipe === 'mingguan') {
+            $lastDayOfMonth = (int) date('t', strtotime(sprintf('%04d-%02d-01', $tahun, $bulan)));
+            switch ($minggu) {
+                case 1:
+                    $startDay = 1;
+                    $endDay = min(7, $lastDayOfMonth);
+                    break;
+                case 2:
+                    $startDay = 8;
+                    $endDay = min(14, $lastDayOfMonth);
+                    break;
+                case 3:
+                    $startDay = 15;
+                    $endDay = min(21, $lastDayOfMonth);
+                    break;
+                case 4:
+                    $startDay = 22;
+                    $endDay = min(28, $lastDayOfMonth);
+                    break;
+                case 5:
+                default:
+                    $startDay = 29;
+                    $endDay = $lastDayOfMonth;
+                    break;
+            }
+
+            $startDate = sprintf('%04d-%02d-%02d', $tahun, $bulan, $startDay);
+            $endDate = sprintf('%04d-%02d-%02d', $tahun, $bulan, $endDay);
+            $bulanStr = $namaBulan[$bulan] ?? '';
+            $periodeLabel = "Minggu ke-{$minggu} ({$startDay} - {$endDay} {$bulanStr} {$tahun})";
+        } else {
+            $tipe = 'bulanan';
             $startDate = sprintf('%04d-%02d-01', $tahun, $bulan);
             $endDate = date('Y-m-t', strtotime($startDate));
+            $bulanStr = $namaBulan[$bulan] ?? '';
+            $periodeLabel = "Bulan {$bulanStr} {$tahun}";
+        }
 
+        $cacheKey = "laporan_absensi_{$tipe}_{$startDate}_{$endDate}" . ($pegawaiId ? "_{$pegawaiId}" : '');
+
+        $laporan = Cache::remember($cacheKey, 60, function () use ($startDate, $endDate, $pegawaiId) {
             $query = Pegawai::select('id', 'nama', 'nip', 'nik', 'jabatan', 'status')
                 ->with([
                     'absensis' => function ($q) use ($startDate, $endDate) {
@@ -156,8 +207,13 @@ class LaporanController extends Controller
         }
 
         return response()->json([
+            'tipe' => $tipe,
             'bulan' => $bulan,
             'tahun' => $tahun,
+            'minggu' => $minggu,
+            'start_date' => $startDate,
+            'end_date' => $endDate,
+            'periode_label' => $periodeLabel,
             'laporan' => $laporan,
         ]);
     }

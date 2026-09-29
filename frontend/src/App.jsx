@@ -25,6 +25,7 @@ import DashboardPegawai from './pages/pegawai/DashboardPegawai';
 import AbsensiPage from './pages/pegawai/AbsensiPage';
 import PengajuanPegawaiPage from './pages/pegawai/PengajuanPegawaiPage';
 import RiwayatPage from './pages/pegawai/RiwayatPage';
+import AkunPegawaiPage from './pages/pegawai/AkunPegawaiPage';
 
 export default function App() {
   return (
@@ -54,6 +55,7 @@ export default function App() {
             <Route path="/absensi" element={<AbsensiPage />} />
             <Route path="/pengajuan" element={<PengajuanPegawaiPage />} />
             <Route path="/riwayat" element={<RiwayatPage />} />
+            <Route path="/akun" element={<AkunPegawaiPage />} />
           </Route>
 
           {/* 404 fallback */}

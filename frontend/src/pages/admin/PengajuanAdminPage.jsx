@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import {
   CheckCircle, XCircle, Clock, Filter, FileText,
   FileCheck, Calendar, User, ExternalLink, AlertCircle,
@@ -38,6 +38,7 @@ export default function PengajuanAdminPage() {
   const cached = cache.get('admin_pengajuans');
   const [pengajuans, setPengajuans] = useState(() => cached || []);
   const [loading, setLoading] = useState(() => cached === null);
+  const [refreshing, setRefreshing] = useState(false);
   const [filterStatus, setFilterStatus] = useState('');
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState(null);
@@ -102,24 +103,42 @@ export default function PengajuanAdminPage() {
     }
   };
 
-  const fetchPengajuan = (status = '', isBackground = false) => {
-    if (!isBackground && (status || cache.get('admin_pengajuans') === null)) {
+  // Fetch all recent pengajuans from server with safety timeout
+  const fetchPengajuan = async (isBackground = false) => {
+    if (!isBackground && cache.get('admin_pengajuans') === null) {
       setLoading(true);
     }
-    const dedupKey = `admin_pengajuans_${status || 'all'}`;
-    cache.fetchDedup(dedupKey, () => api.get('/pengajuan', { params: { status } }))
-      .then(({ data }) => {
-        const list = data.data || [];
-        setPengajuans(list);
-        if (!status) cache.set('admin_pengajuans', list);
-      })
-      .catch(console.error)
-      .finally(() => setLoading(false));
+    const safetyTimer = setTimeout(() => {
+      setLoading(false);
+      setRefreshing(false);
+    }, 3500);
+
+    try {
+      const { data } = await cache.fetchDedup('admin_pengajuans_all', () =>
+        api.get('/pengajuan', { params: { per_page: 200 } })
+      );
+      const list = data.data || [];
+      setPengajuans(list);
+      cache.set('admin_pengajuans', list);
+    } catch (err) {
+      console.error('Gagal mengambil data pengajuan:', err);
+    } finally {
+      clearTimeout(safetyTimer);
+      setLoading(false);
+      setRefreshing(false);
+    }
   };
 
   useEffect(() => {
-    fetchPengajuan(filterStatus, Boolean(cached && !filterStatus));
-  }, [filterStatus]);
+    fetchPengajuan(Boolean(cached));
+  }, []);
+
+  const handleManualRefresh = () => {
+    setRefreshing(true);
+    cache.remove('admin_pengajuans');
+    cache.remove('admin_pengajuans_all');
+    fetchPengajuan(false);
+  };
 
   // Pre-warm document previews in the browser cache so clicking 'Lihat Lampiran' is instantaneous (0 ms)
   useEffect(() => {
@@ -135,13 +154,29 @@ export default function PengajuanAdminPage() {
   const handleProses = async (pengajuan, status) => {
     setSubmitting(true);
     try {
-      await api.patch(`/pengajuan/${pengajuan.id}/proses`, { status, catatan_admin: catatan });
+      const res = await api.patch(`/pengajuan/${pengajuan.id}/proses`, { status, catatan_admin: catatan });
+      const updatedItem = res.data?.pengajuan;
+
+      // Optimistic instant update
+      setPengajuans((prev) =>
+        prev.map((item) =>
+          item.id === pengajuan.id
+            ? (updatedItem || { ...item, status, catatan_admin: catatan, diproses_pada: new Date().toISOString() })
+            : item
+        )
+      );
+
       cache.remove('admin_pengajuans');
       cache.remove('admin_dashboard');
       cache.remove('dashboard_pegawai');
+      cache.remove('pengajuan_list');
       setSelected(null);
       setCatatan('');
-      fetchPengajuan(filterStatus);
+      setSuccessMsg(`Permohonan ${pengajuan.pegawai?.nama || 'pegawai'} berhasil ${status === 'disetujui' ? 'disetujui' : 'ditolak'}.`);
+      setTimeout(() => setSuccessMsg(''), 4000);
+
+      // Revalidate in background
+      fetchPengajuan(true);
     } catch (err) {
       alert(err.response?.data?.message || 'Gagal memproses pengajuan');
     } finally {
@@ -154,6 +189,10 @@ export default function PengajuanAdminPage() {
     setDeleting(true);
     try {
       await api.delete(`/pengajuan/${itemToDelete.id}`);
+
+      // Optimistic instant local removal
+      setPengajuans((prev) => prev.filter((item) => item.id !== itemToDelete.id));
+
       cache.remove('admin_pengajuans');
       cache.remove('admin_dashboard');
       cache.remove('dashboard_pegawai');
@@ -167,7 +206,9 @@ export default function PengajuanAdminPage() {
         setSelected(null);
       }
       setItemToDelete(null);
-      fetchPengajuan(filterStatus);
+
+      // Revalidate in background
+      fetchPengajuan(true);
     } catch (err) {
       alert(err.response?.data?.message || 'Gagal menghapus data pengajuan');
     } finally {
@@ -175,18 +216,45 @@ export default function PengajuanAdminPage() {
     }
   };
 
-  const filteredPengajuans = pengajuans.filter((p) => {
-    if (!search.trim()) return true;
-    const term = search.toLowerCase();
-    const nama = (p.pegawai?.nama || '').toLowerCase();
-    const jabatan = (p.pegawai?.jabatan || '').toLowerCase();
-    const jenis = (JENIS_MAP[p.jenis] || p.jenis || '').toLowerCase();
-    const alasan = (p.alasan || '').toLowerCase();
-    const status = (STATUS_MAP[p.status]?.label || p.status || '').toLowerCase();
-    return nama.includes(term) || jabatan.includes(term) || jenis.includes(term) || alasan.includes(term) || status.includes(term);
-  });
+  // Instant count calculation
+  const counts = useMemo(() => {
+    const res = { all: pengajuans.length, pending: 0, disetujui: 0, ditolak: 0 };
+    for (const p of pengajuans) {
+      if (p.status in res) {
+        res[p.status]++;
+      }
+    }
+    return res;
+  }, [pengajuans]);
 
-  const pendingCount = pengajuans.filter(p => p.status === 'pending').length;
+  // Instant client-side filtering (0ms - zero loading lag)
+  const filteredPengajuans = useMemo(() => {
+    return pengajuans.filter((p) => {
+      // 1. Filter status
+      if (filterStatus && p.status !== filterStatus) {
+        return false;
+      }
+      // 2. Quick search
+      if (search.trim()) {
+        const term = search.toLowerCase();
+        const nama = (p.pegawai?.nama || '').toLowerCase();
+        const jabatan = (p.pegawai?.jabatan || '').toLowerCase();
+        const jenis = (JENIS_MAP[p.jenis] || p.jenis || '').toLowerCase();
+        const alasan = (p.alasan || '').toLowerCase();
+        const status = (STATUS_MAP[p.status]?.label || p.status || '').toLowerCase();
+        if (
+          !nama.includes(term) &&
+          !jabatan.includes(term) &&
+          !jenis.includes(term) &&
+          !alasan.includes(term) &&
+          !status.includes(term)
+        ) {
+          return false;
+        }
+      }
+      return true;
+    });
+  }, [pengajuans, filterStatus, search]);
 
   return (
     <div className="page">
@@ -222,17 +290,29 @@ export default function PengajuanAdminPage() {
               <Filter size={16} style={{ color: 'var(--primary)' }} />
               <span style={{ fontWeight: '600', color: 'var(--text)' }}>Status:</span>
               {[
-                { id: '', label: 'Semua' },
-                { id: 'pending', label: 'Menunggu' },
-                { id: 'disetujui', label: 'Disetujui' },
-                { id: 'ditolak', label: 'Ditolak' }
+                { id: '', label: 'Semua', count: counts.all },
+                { id: 'pending', label: 'Menunggu', count: counts.pending },
+                { id: 'disetujui', label: 'Disetujui', count: counts.disetujui },
+                { id: 'ditolak', label: 'Ditolak', count: counts.ditolak }
               ].map((s) => (
                 <button
                   key={s.id}
                   className={`btn-filter ${filterStatus === s.id ? 'active' : ''}`}
                   onClick={() => setFilterStatus(s.id)}
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
                 >
-                  {s.label}
+                  <span>{s.label}</span>
+                  <span
+                    style={{
+                      fontSize: '11px',
+                      padding: '1px 7px',
+                      borderRadius: '10px',
+                      background: filterStatus === s.id ? 'rgba(255,255,255,0.25)' : 'var(--bg)',
+                      fontWeight: '700'
+                    }}
+                  >
+                    {s.count}
+                  </span>
                 </button>
               ))}
             </div>
@@ -277,13 +357,13 @@ export default function PengajuanAdminPage() {
 
       {/* Table */}
       <div className="card">
-        <div className="card-header">
+        <div className="card-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
             <FileText size={18} style={{ color: 'var(--primary)' }} />
             <h3 className="card-title" style={{ margin: 0 }}>Daftar Pengajuan Masuk</h3>
-            {pendingCount > 0 && (
+            {counts.pending > 0 && (
               <span className="badge badge-warning" style={{ fontSize: '11.5px' }}>
-                {pendingCount} Perlu Ditindaklanjuti
+                {counts.pending} Perlu Ditindaklanjuti
               </span>
             )}
             {search && (
@@ -292,6 +372,18 @@ export default function PengajuanAdminPage() {
               </span>
             )}
           </div>
+
+          <button
+            type="button"
+            className="btn btn-outline btn-sm"
+            onClick={handleManualRefresh}
+            disabled={refreshing}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '12.5px' }}
+            title="Segarkan data dari server"
+          >
+            <RefreshCw size={13} style={{ animation: refreshing ? 'spin 0.8s linear infinite' : 'none' }} />
+            <span>{refreshing ? 'Memuat...' : 'Segarkan'}</span>
+          </button>
         </div>
 
         <div className="table-wrapper">

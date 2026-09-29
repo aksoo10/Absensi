@@ -49,7 +49,8 @@ class PengajuanController extends Controller
             });
         }
 
-        $res = response()->json($query->latest()->paginate(15));
+        $perPage = min((int) $request->input('per_page', 100), 500);
+        $res = response()->json($query->latest()->paginate($perPage));
         $res->headers->set('X-Exec-Time', round((microtime(true) - $start) * 1000, 2) . 'ms');
         return $res;
     }

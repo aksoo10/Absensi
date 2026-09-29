@@ -95,6 +95,9 @@ export function AuthProvider({ children }) {
         if (boot.absensi_hari_ini) cache.set('absensi_hari_ini', boot.absensi_hari_ini);
         if (boot.pengajuans) cache.set('pengajuan_list', boot.pengajuans);
         if (boot.notifikasi) cache.set('notifikasi', boot.notifikasi);
+        if (boot.riwayat_bulan_ini && boot.bulan && boot.tahun) {
+          cache.set(`riwayat_${boot.bulan}_${boot.tahun}_1`, boot.riwayat_bulan_ini);
+        }
       }
     }).catch(() => {});
 

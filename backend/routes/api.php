@@ -27,6 +27,8 @@ Route::middleware('auth:sanctum')->group(function () {
     // Auth & Notifikasi
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::get('/user', [AuthController::class, 'me']);
+    Route::put('/profile', [AuthController::class, 'updateProfile']);
+    Route::put('/profile/password', [AuthController::class, 'updatePassword']);
     Route::get('/notifikasi', [NotifikasiController::class, 'index']);
 
     // Absensi (Pegawai & Admin)

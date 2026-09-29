@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { Calendar, Clock, CheckCircle, UserCheck, AlertTriangle } from 'lucide-react';
+import { useEffect, useState, useRef } from 'react';
+import { Calendar, Clock, CheckCircle, UserCheck, AlertTriangle, AlertCircle, RefreshCw } from 'lucide-react';
 import api from '../../lib/api';
 import cache from '../../lib/cache';
 
@@ -15,30 +15,54 @@ export default function RiwayatPage() {
   const [tahun, setTahun] = useState(currentYear);
   const [page, setPage] = useState(1);
   const [meta, setMeta] = useState(() => initialCache || null);
+  const [error, setError] = useState(null);
 
-  const fetchRiwayat = () => {
-    const key = `riwayat_${bulan}_${tahun}_${page}`;
-    const cached = cache.get(key);
+  const timeoutRef = useRef(null);
+
+  const fetchRiwayat = (b = bulan, y = tahun, p = page, forceFresh = false) => {
+    const key = `riwayat_${b}_${y}_${p}`;
+    const cached = !forceFresh ? cache.get(key) : null;
+
     if (cached) {
       setAbsensis(cached.data || []);
       setMeta(cached);
       setLoading(false);
+      setError(null);
     } else {
       setLoading(true);
     }
 
-    api.get('/absensi', { params: { bulan, tahun, page } })
+    // Safety timeout: ensure loading spinner is never stuck longer than 3.5s under any circumstance
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    timeoutRef.current = setTimeout(() => {
+      setLoading(false);
+    }, 3500);
+
+    cache.fetchDedup(`req_${key}`, () => api.get('/absensi', { params: { bulan: b, tahun: y, page: p, per_page: 50 } }))
       .then(({ data }) => {
+        if (timeoutRef.current) clearTimeout(timeoutRef.current);
         setAbsensis(data.data || []);
         setMeta(data);
         cache.set(key, data);
+        setError(null);
       })
-      .catch(console.error)
-      .finally(() => setLoading(false));
+      .catch((err) => {
+        console.error('Error fetching riwayat:', err);
+        if (!cached) {
+          setError('Gagal memuat catatan riwayat presensi. Silakan periksa koneksi server backend.');
+        }
+      })
+      .finally(() => {
+        if (timeoutRef.current) clearTimeout(timeoutRef.current);
+        setLoading(false);
+      });
   };
 
   useEffect(() => {
-    fetchRiwayat();
+    fetchRiwayat(bulan, tahun, page);
+    return () => {
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    };
   }, [bulan, tahun, page]);
 
   const bulanNames = [
@@ -86,6 +110,17 @@ export default function RiwayatPage() {
                   <option key={y} value={y}>{y}</option>
                 ))}
               </select>
+
+              <button
+                type="button"
+                className="btn btn-sm btn-secondary"
+                onClick={() => fetchRiwayat(bulan, tahun, page, true)}
+                title="Segarkan Data Presensi"
+                style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+              >
+                <RefreshCw size={14} />
+                <span>Segarkan</span>
+              </button>
             </div>
 
             <div style={{ fontSize: '13px', color: 'var(--text-muted)', fontWeight: '500' }}>
@@ -130,6 +165,23 @@ export default function RiwayatPage() {
             Daftar Presensi {bulanNames[bulan - 1]} {tahun}
           </h3>
         </div>
+
+        {error && (
+          <div className="alert alert-error" style={{ margin: '16px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <AlertCircle size={17} style={{ flexShrink: 0 }} />
+              <span>{error}</span>
+            </div>
+            <button
+              type="button"
+              className="btn btn-sm btn-secondary"
+              onClick={() => fetchRiwayat(bulan, tahun, page, true)}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+            >
+              <RefreshCw size={14} /> Coba Lagi
+            </button>
+          </div>
+        )}
 
         <div className="table-wrapper">
           {loading && absensis.length === 0 ? (

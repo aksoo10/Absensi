@@ -19,10 +19,22 @@ class AbsensiController extends Controller
     {
         $user = $request->user();
 
-        $query = Absensi::with('pegawai.user');
+        $query = Absensi::query();
 
         if ($user->role === 'pegawai') {
-            $query->where('pegawai_id', $user->pegawai->id);
+            $pegawai = $user->pegawai;
+            if (!$pegawai) {
+                return response()->json([
+                    'current_page' => 1,
+                    'data' => [],
+                    'total' => 0,
+                    'last_page' => 1,
+                    'per_page' => 50,
+                ]);
+            }
+            $query->where('pegawai_id', $pegawai->id);
+        } else {
+            $query->with('pegawai.user');
         }
 
         if ($request->tanggal) {
@@ -38,7 +50,8 @@ class AbsensiController extends Controller
             $query->where('pegawai_id', $request->pegawai_id);
         }
 
-        return response()->json($query->orderByDesc('tanggal')->paginate(20));
+        $perPage = min((int) ($request->per_page ?? 50), 100);
+        return response()->json($query->orderByDesc('tanggal')->paginate($perPage));
     }
 
     /**

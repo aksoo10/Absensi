@@ -3,7 +3,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import {
   Building2, Lock, Mail, Eye, EyeOff, AlertCircle,
-  ShieldCheck, ArrowRight, User, Briefcase, Hash
+  ShieldCheck, ArrowRight, User, Briefcase, Hash, Phone
 } from 'lucide-react';
 
 export default function RegisterPage() {
@@ -12,6 +12,7 @@ export default function RegisterPage() {
 
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
+  const [noHp, setNoHp] = useState('');
   const [jabatan, setJabatan] = useState('');
   const [nip, setNip] = useState('');
   const [password, setPassword] = useState('');
@@ -26,6 +27,7 @@ export default function RegisterPage() {
   useEffect(() => {
     setName('');
     setEmail('');
+    setNoHp('');
     setJabatan('');
     setNip('');
     setPassword('');
@@ -34,6 +36,7 @@ export default function RegisterPage() {
       setIsReadOnly(false);
       setName('');
       setEmail('');
+      setNoHp('');
       setJabatan('');
       setNip('');
       setPassword('');
@@ -66,6 +69,7 @@ export default function RegisterPage() {
         role: 'pegawai',
         jabatan: jabatan || 'Staf Perangkat Desa',
         ...(nip && { nip }),
+        ...(noHp && { no_telepon: noHp, no_hp: noHp }),
       };
 
       await register(payload);
@@ -207,6 +211,27 @@ export default function RegisterPage() {
                   onFocus={() => setIsReadOnly(false)}
                   autoComplete="off"
                   required
+                />
+              </div>
+            </div>
+
+            <div className="form-group">
+              <label htmlFor="reg-phone" className="form-label">
+                Nomor HP / WhatsApp <span style={{ fontWeight: 'normal', color: 'var(--text-muted)' }}>(Opsional)</span>
+              </label>
+              <div className="input-wrapper">
+                <Phone size={18} className="input-icon" />
+                <input
+                  id="reg-phone"
+                  name="register_user_phone"
+                  type="tel"
+                  className="form-input"
+                  placeholder="Contoh: 081234567890"
+                  value={noHp}
+                  onChange={(e) => setNoHp(e.target.value)}
+                  readOnly={isReadOnly}
+                  onFocus={() => setIsReadOnly(false)}
+                  autoComplete="off"
                 />
               </div>
             </div>

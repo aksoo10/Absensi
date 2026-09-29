@@ -42,8 +42,8 @@ class BootstrapController extends Controller
         // 6. Jadwal Kerja
         $jadwals = JadwalKerja::orderBy('nama')->get();
 
-        // 7. Pengajuan Cuti/Izin (top 50)
-        $pengajuans = Pengajuan::with('pegawai.user', 'pemroses')->latest()->limit(50)->get();
+        // 7. Pengajuan Cuti/Izin (top 100)
+        $pengajuans = Pengajuan::with('pegawai.user', 'pemroses')->latest()->limit(100)->get();
 
         // 8. Notifikasi
         $notifCtrl = app(NotifikasiController::class);
@@ -107,11 +107,36 @@ class BootstrapController extends Controller
         $notifCtrl = app(NotifikasiController::class);
         $notifikasi = $notifCtrl->index($request)->getData(true)['data'] ?? [];
 
+        // Pre-warm riwayat presensi bulan berjalan (~10ms)
+        $today = today();
+        $curBulan = (int) $today->format('n');
+        $curTahun = (int) $today->format('Y');
+        $riwayatBulanIni = null;
+        if ($pegawai) {
+            $riwayatData = Absensi::where('pegawai_id', $pegawai->id)
+                ->whereMonth('tanggal', $curBulan)
+                ->whereYear('tanggal', $curTahun)
+                ->orderByDesc('tanggal')
+                ->limit(50)
+                ->get();
+
+            $riwayatBulanIni = [
+                'current_page' => 1,
+                'data' => $riwayatData,
+                'total' => $riwayatData->count(),
+                'last_page' => 1,
+                'per_page' => 50,
+            ];
+        }
+
         $res = response()->json([
             'dashboard_pegawai' => $dashboardPegawai,
             'absensi_hari_ini' => $absensiHariIni,
             'pengajuans' => $pengajuans,
             'notifikasi' => $notifikasi,
+            'riwayat_bulan_ini' => $riwayatBulanIni,
+            'bulan' => $curBulan,
+            'tahun' => $curTahun,
         ]);
 
         $res->headers->set('X-Exec-Time', round((microtime(true) - $start) * 1000, 2) . 'ms');
