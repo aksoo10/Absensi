@@ -91,7 +91,7 @@ export default function RegisterPage() {
       } else if (err.response?.data?.message) {
         setError(err.response.data.message);
       } else if (err.request) {
-        setError('Tidak dapat terhubung ke server backend (port 8000). Pastikan backend aktif.');
+        setError('Tidak dapat terhubung ke server backend. Pastikan server backend aktif.');
       } else {
         setError(err.message || 'Gagal melakukan pendaftaran akun');
       }
